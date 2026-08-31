@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#101714">
+    <title>LOOI Drive</title>
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup" aria-label="LOOI Drive">
+          <span class="brand-mark" aria-hidden="true"><i data-lucide="radio-tower"></i></span>
+          <span>LOOI Drive</span>
+        </div>
+        <div class="connection-group">
+          <span class="connection-state" id="connectionState" data-state="disconnected">
+            <span class="state-dot" aria-hidden="true"></span>
+            <span id="connectionLabel">Not connected</span>
+          </span>
+          <button class="button button--primary" type="button" id="connectButton">
+            <i data-lucide="bluetooth"></i><span>Connect</span>
+          </button>
+          <p class="connection-detail" id="connectionDetail" role="status" aria-live="polite">
+            Turn on LOOI-S3, then press Connect.
+          </p>
+        </div>
+      </header>
+
+      <main>
+        <section class="live-section" aria-label="Live view">
+          <div class="live-frame" id="liveFrame">
+            <video id="cameraPreview" autoplay playsinline muted></video>
+            <div class="view-empty" id="cameraEmpty">
+              <i data-lucide="video-off"></i>
+              <span>Camera off</span>
+            </div>
+            <div class="view-hud">
+              <span class="hud-label" id="deviceName">LOOI-S3</span>
+              <span class="hud-label" id="motionState">Stopped</span>
+            </div>
+            <div class="view-actions">
+              <button class="icon-button" type="button" id="cameraButton" aria-label="Start camera" title="Start camera">
+                <i data-lucide="camera"></i>
+              </button>
+              <button class="icon-button" type="button" id="cameraSwitchButton" aria-label="Switch camera" title="Switch camera">
+                <i data-lucide="switch-camera"></i>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="control-grid" aria-label="Robot controls">
+          <section class="control-panel drive-panel" aria-labelledby="driveTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Motion</p>
+                <h1 id="driveTitle">Differential Drive</h1>
+              </div>
+              <button class="stop-button" type="button" id="stopButton">
+                <i data-lucide="octagon-x"></i><span>Stop</span>
+              </button>
+            </div>
+
+            <div class="speed-control">
+              <label for="speedSlider">Speed</label>
+              <output id="speedValue" for="speedSlider">12%</output>
+              <input id="speedSlider" type="range" min="5" max="15" value="12" step="1">
+            </div>
+
+            <div class="drive-pad" role="group" aria-label="Drive direction">
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-drive="forward" aria-label="Drive forward" title="Drive forward">
+                <i data-lucide="chevron-up"></i>
+              </button>
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-drive="left" aria-label="Rotate left" title="Rotate left">
+                <i data-lucide="rotate-ccw"></i>
+              </button>
+              <button class="pad-button pad-button--center" type="button" data-drive="stop" aria-label="Stop" title="Stop">
+                <i data-lucide="square"></i>
+              </button>
+              <button class="pad-button" type="button" data-drive="right" aria-label="Rotate right" title="Rotate right">
+                <i data-lucide="rotate-cw"></i>
+              </button>
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-drive="reverse" aria-label="Drive reverse" title="Drive reverse">
+                <i data-lucide="chevron-down"></i>
+              </button>
+              <span aria-hidden="true"></span>
+            </div>
+
+            <div class="drive-readout" aria-live="polite">
+              <span><small>Left</small><strong id="leftSpeedValue">0.00</strong></span>
+              <span><small>Right</small><strong id="rightSpeedValue">0.00</strong></span>
+              <span><small>Link</small><strong id="latencyValue">--</strong></span>
+            </div>
+          </section>
+
+          <section class="control-panel gimbal-panel" aria-labelledby="gimbalTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Head</p>
+                <h2 id="gimbalTitle">Gimbal</h2>
+              </div>
+              <button class="icon-button" type="button" id="centerGimbalButton" aria-label="Center gimbal" title="Center gimbal">
+                <i data-lucide="crosshair"></i>
+              </button>
+            </div>
+
+            <div class="axis-control">
+              <div class="axis-heading"><label for="yawSlider">Yaw</label><output id="yawValue" for="yawSlider">0 degrees</output></div>
+              <input id="yawSlider" type="range" min="0" max="180" value="0" step="1">
+            </div>
+            <div class="axis-control">
+              <div class="axis-heading"><label for="pitchSlider">Pitch</label><output id="pitchValue" for="pitchSlider">0 degrees</output></div>
+              <input id="pitchSlider" type="range" min="0" max="90" value="0" step="1">
+            </div>
+            <div class="drive-pad gimbal-pad" role="group" aria-label="Gimbal direction">
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-gimbal="up" aria-label="Look up" title="Look up">
+                <i data-lucide="chevron-up"></i>
+              </button>
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-gimbal="left" aria-label="Look left" title="Look left">
+                <i data-lucide="chevron-left"></i>
+              </button>
+              <button class="pad-button pad-button--gimbal-center" type="button" data-gimbal="center" aria-label="Center gimbal" title="Center gimbal">
+                <i data-lucide="crosshair"></i>
+              </button>
+              <button class="pad-button" type="button" data-gimbal="right" aria-label="Look right" title="Look right">
+                <i data-lucide="chevron-right"></i>
+              </button>
+              <span aria-hidden="true"></span>
+              <button class="pad-button" type="button" data-gimbal="down" aria-label="Look down" title="Look down">
+                <i data-lucide="chevron-down"></i>
+              </button>
+              <span aria-hidden="true"></span>
+            </div>
+            <div class="gimbal-state">
+              <span><i data-lucide="scan-line"></i><span id="yawPinValue">Yaw: 0-180 degrees</span></span>
+              <span><i data-lucide="move-vertical"></i><span id="pitchPinValue">Pitch: 0-90 degrees</span></span>
+            </div>
+          </section>
+
+          <section class="control-panel telemetry-panel" aria-labelledby="telemetryTitle">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Device</p>
+                <h2 id="telemetryTitle">Status</h2>
+              </div>
+              <button class="icon-button" type="button" id="refreshButton" aria-label="Refresh device status" title="Refresh device status">
+                <i data-lucide="refresh-cw"></i>
+              </button>
+            </div>
+            <dl class="telemetry-list">
+              <div><dt>Motor</dt><dd id="telemetryMotor">Stopped</dd></div>
+              <div><dt>Remaining</dt><dd id="telemetryRemaining">--</dd></div>
+              <div><dt>Max speed</dt><dd id="telemetryMaxSpeed">0.12</dd></div>
+              <div><dt>Uptime</dt><dd id="telemetryUptime">--</dd></div>
+            </dl>
+            <div class="event-log" id="eventLog" aria-live="polite"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="../runtime-config.js"></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,5208 @@
+:root {
+  color-scheme: dark;
+  --bg: #070a12;
+  --bg-accent: #10192a;
+  --panel: rgba(13, 20, 34, 0.82);
+  --panel-border: rgba(122, 193, 255, 0.16);
+  --text: #e8f1ff;
+  --muted: #8fa8c4;
+  --line: rgba(122, 193, 255, 0.12);
+  --glow: #61d3ff;
+  --glow-strong: #90e7ff;
+  --danger: #ff6b6b;
+  --danger-bg: rgba(146, 31, 31, 0.32);
+  --warn-bg: rgba(255, 191, 92, 0.12);
+  --warning: #ffd166;
+  --success: #7ee0ba;
+  --shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+  --local-vision-widget-width: 140px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@media (max-width: 560px) {
+  :root {
+    --local-vision-widget-width: 110px;
+  }
+}
+
+/* Primary hands-on controls stay outside the diagnostics drawer. */
+.manual-control-dock {
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 38;
+  width: min(520px, calc(100vw - 2rem));
+  padding: 0.85rem;
+  border: 1px solid rgba(122, 193, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(5, 9, 16, 0.9);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(16px);
+}
+
+.manual-control-dock__header,
+.manual-control-dock__speed,
+.manual-control-dock__columns {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.manual-control-dock__header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.manual-control-dock__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.manual-control-dock .eyebrow {
+  margin: 0 0 0.2rem;
+}
+
+.manual-control-dock h2,
+.manual-control-dock h3 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+.manual-control-dock h2 {
+  font-size: 1rem;
+}
+
+.manual-control-dock h3 {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.manual-mode-button {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border-color: rgba(126, 224, 186, 0.5);
+  color: #dffff1;
+  background: rgba(22, 83, 63, 0.42);
+  font-size: 0.82rem;
+}
+
+.manual-collapse-button,
+.vision-collapse-button {
+  min-height: 2.4rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgba(17, 29, 48, 0.72);
+  font-size: 0.76rem;
+}
+
+.manual-collapse-button:hover,
+.manual-collapse-button:focus-visible,
+.vision-collapse-button:hover,
+.vision-collapse-button:focus-visible {
+  color: var(--text);
+  border-color: rgba(144, 231, 255, 0.7);
+}
+
+.manual-control-dock[data-collapsed="true"] {
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+}
+
+.manual-control-dock[data-collapsed="true"] .manual-control-dock__body {
+  display: none;
+}
+
+.manual-control-dock__status {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.manual-control-dock__speed {
+  grid-template-columns: auto 3.2rem minmax(0, 1fr);
+  align-items: center;
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.manual-control-dock__speed output {
+  color: var(--text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  text-align: right;
+}
+
+.manual-control-dock__speed input {
+  width: 100%;
+}
+
+.manual-control-dock__columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.75rem;
+}
+
+.manual-control-group {
+  min-width: 0;
+}
+
+.manual-control-group h3 {
+  margin-bottom: 0.45rem;
+}
+
+.manual-direction-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.manual-direction-pad button {
+  min-width: 0;
+  min-height: 2.45rem;
+  padding: 0.35rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  touch-action: none;
+  user-select: none;
+}
+
+.manual-direction-pad button.is-held {
+  border-color: rgba(144, 231, 255, 0.85);
+  background: rgba(40, 118, 169, 0.62);
+  transform: translateY(1px);
+}
+
+.manual-control-dock[data-mode="agent"] .manual-control-dock__speed,
+.manual-control-dock[data-mode="agent"] .manual-control-dock__columns,
+.manual-control-dock[data-mode="agent"] .manual-control-dock__status {
+  opacity: 0.48;
+}
+
+.manual-control-dock[data-mode="agent"] .manual-control-dock__speed,
+.manual-control-dock[data-mode="agent"] .manual-control-dock__columns {
+  pointer-events: none;
+}
+
+.manual-control-mode .manual-mode-button {
+  border-color: rgba(255, 209, 102, 0.72);
+  color: #fff4d2;
+  background: rgba(111, 72, 16, 0.52);
+}
+
+@media (max-width: 560px) {
+  .manual-control-dock {
+    left: max(0.6rem, env(safe-area-inset-left));
+    bottom: max(0.6rem, env(safe-area-inset-bottom));
+    width: min(440px, calc(100vw - 1.2rem));
+    padding: 0.7rem;
+  }
+
+  .manual-control-dock__header {
+    gap: 0.45rem;
+  }
+
+  .manual-mode-button {
+    min-height: 2.25rem;
+    padding-inline: 0.5rem;
+    font-size: 0.74rem;
+  }
+
+  .manual-collapse-button {
+    min-height: 2.25rem;
+    padding-inline: 0.5rem;
+    font-size: 0.74rem;
+  }
+
+  .manual-direction-pad button {
+    min-height: 2.25rem;
+    font-size: 0.72rem;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(97, 211, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, #08101c 0%, #05070b 100%);
+  color: var(--text);
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(320px, 1fr);
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.face-panel,
+.control-panel {
+  min-height: 0;
+}
+
+.face-panel {
+  display: grid;
+  place-items: center;
+}
+
+.face-frame {
+  width: min(76vw, 640px);
+  aspect-ratio: 1 / 1;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border-radius: 2rem;
+  background:
+    radial-gradient(circle at top, rgba(144, 231, 255, 0.08), transparent 52%),
+    linear-gradient(180deg, rgba(13, 20, 34, 0.92), rgba(7, 10, 18, 0.98));
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+}
+
+#faceCanvas {
+  --eye-bg: #101012;
+  --eye-core: #bdf3ff;
+  --eye-glow: #2632ff;
+  --eye-scan: rgba(185, 255, 255, 0.72);
+  --blink-time: 360ms;
+  --soft-close-time: 420ms;
+  --sleep-time: 700ms;
+  --photo-time: 2400ms;
+  --follow-open-time: 900ms;
+  --follow-stop-time: 800ms;
+  --bite-time: 3200ms;
+  --finish-burger-time: 2200ms;
+  --drink-open-time: 1600ms;
+  --finish-drink-time: 1800ms;
+  --question-time: 2200ms;
+  --angry-time: 1800ms;
+  --love-time: 2400ms;
+  --shock-time: 1700ms;
+  --tell-open-time: 1400ms;
+  --tell-loop-time: 1600ms;
+  --tell-finish-time: 1200ms;
+  --kiss-time: 2600ms;
+  --wake-time: 1900ms;
+  --look-x: 0px;
+  --look-scale-y: 1;
+  --glow-dir: 1;
+  --expression-intensity: 1;
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--eye-bg);
+}
+
+.looi-eyes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(78px, 18vw, 260px);
+  transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  transition: transform 520ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.looi-eye {
+  position: relative;
+  width: clamp(126px, 25vw, 258px);
+  height: clamp(104px, 20vw, 214px);
+  transform: translateY(-10px);
+}
+
+.looi-eye__glow,
+.looi-eye__core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.looi-eye__glow {
+  z-index: 1;
+  background: var(--eye-glow);
+  transform: translate(calc(var(--glow-dir) * 18px), 24px);
+  filter: blur(5px);
+  opacity: 0.94;
+  transition: transform 520ms cubic-bezier(0.2, 0.9, 0.25, 1), opacity 220ms ease;
+}
+
+.looi-eye__core {
+  z-index: 2;
+  background: var(--eye-core);
+  box-shadow: 0 0 2px rgba(210, 255, 255, 0.55);
+  transition: background 220ms ease, box-shadow 220ms ease;
+}
+
+.looi-eye__lid {
+  position: absolute;
+  z-index: 4;
+  left: -28%;
+  top: -42%;
+  width: 156%;
+  height: 86%;
+  border-radius: 0 0 58% 58% / 0 0 78% 78%;
+  background: var(--eye-bg);
+  transform: translateY(-120%);
+  pointer-events: none;
+}
+
+.looi-eye__love-lid {
+  position: absolute;
+  z-index: 4;
+  left: -18%;
+  top: auto;
+  bottom: -34%;
+  width: 136%;
+  height: 78%;
+  border-radius: 58% 58% 0 0 / 78% 78% 0 0;
+  background: var(--eye-bg);
+  transform: translateY(125%);
+  pointer-events: none;
+}
+
+.looi-eye__scan-line {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  width: 420%;
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(95, 245, 255, 0.55) 16%,
+    var(--eye-scan) 50%,
+    rgba(95, 245, 255, 0.45) 84%,
+    transparent 100%
+  );
+  opacity: 0;
+  transform: translate(-50%, -50%) scaleX(0.25);
+  pointer-events: none;
+}
+
+.looi-camera-icon {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 9%;
+  width: clamp(210px, 25vw, 330px);
+  height: clamp(130px, 15vw, 205px);
+  transform: translate(-50%, 140%) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.looi-camera-icon__body {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 5%;
+  height: 66%;
+  border-radius: 12px;
+  background: #f7f7f7;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+}
+
+.looi-camera-icon__body::before,
+.looi-camera-icon__body::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 22%;
+  height: 100%;
+  background: #e9a13a;
+}
+
+.looi-camera-icon__body::before {
+  left: 0;
+}
+
+.looi-camera-icon__body::after {
+  right: 0;
+}
+
+.looi-camera-icon__top {
+  position: absolute;
+  left: 25%;
+  top: 6%;
+  width: 34%;
+  height: 26%;
+  border-radius: 8px 8px 0 0;
+  background: #f7f7f7;
+}
+
+.looi-camera-icon__lens {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 48% 54%, #0c1719 0 20%, #0a6d66 21% 32%, #132527 33% 54%, #343434 55% 68%, #f3f3f3 69% 100%);
+  box-shadow: inset 0 0 0 5px #d8d8d8, 0 0 12px rgba(95, 245, 255, 0.25);
+}
+
+.looi-camera-icon__flash-dot {
+  position: absolute;
+  right: 25%;
+  top: 31%;
+  width: 9%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: #113434;
+  box-shadow: inset 0 0 0 3px #f7f7f7;
+}
+
+.looi-follow-target {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 7%;
+  width: clamp(120px, 15vw, 210px);
+  height: clamp(210px, 24vw, 340px);
+  opacity: 0;
+  transform: translate(-50%, 130%) rotate(-38deg) scale(0.9);
+  transform-origin: 50% 78%;
+  pointer-events: none;
+}
+
+.looi-follow-target::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 62%;
+  aspect-ratio: 1;
+  border: clamp(8px, 1vw, 14px) solid #8fa4d4;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: rgba(220, 230, 248, 0.65);
+  box-shadow:
+    0 0 14px rgba(49, 216, 255, 0.65),
+    inset 0 0 12px rgba(255, 255, 255, 0.65);
+}
+
+.looi-follow-target::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 22%;
+  height: 48%;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(180deg, #4a67ad 0 23%, #8fa4d4 24% 34%, #4a67ad 35% 45%, #ffc14d 46% 100%);
+  box-shadow: 0 0 10px rgba(49, 216, 255, 0.45);
+}
+
+.looi-follow-shine {
+  position: absolute;
+  z-index: 6;
+  left: 42%;
+  top: 10%;
+  width: 20%;
+  height: 8%;
+  border-radius: 999px;
+  border-top: 5px solid rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  transform: rotate(8deg);
+  pointer-events: none;
+}
+
+.looi-burger {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 11%;
+  width: clamp(95px, 11vw, 165px);
+  height: clamp(75px, 8vw, 120px);
+  opacity: 0;
+  transform: translate(-50%, 120%) scale(0.86);
+  pointer-events: none;
+}
+
+.looi-burger > * {
+  position: absolute;
+}
+
+.looi-burger__bun-top {
+  left: 8%;
+  top: 0;
+  width: 84%;
+  height: 42%;
+  border-radius: 999px 999px 18px 18px;
+  background: linear-gradient(#ffd36d, #e98725);
+  box-shadow: inset -8px -8px 0 rgba(190, 82, 12, 0.18), 0 0 10px rgba(255, 191, 58, 0.35);
+}
+
+.looi-burger__bun-top::before,
+.looi-burger__bun-top::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.looi-burger__bun-top::before {
+  left: 28%;
+  top: 28%;
+  transform: rotate(18deg);
+}
+
+.looi-burger__bun-top::after {
+  right: 24%;
+  top: 34%;
+  transform: rotate(-14deg);
+}
+
+.looi-burger__bite {
+  z-index: 4;
+  right: 3%;
+  top: -7%;
+  width: 36%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--eye-bg);
+  opacity: 0;
+  transform: scale(0.2);
+  box-shadow: -12px 14px 0 -2px var(--eye-bg), -30px 6px 0 -6px var(--eye-bg);
+}
+
+.looi-burger__cheese {
+  left: 12%;
+  top: 42%;
+  width: 76%;
+  height: 18%;
+  background: #ffd830;
+  clip-path: polygon(0 0, 100% 0, 92% 100%, 70% 55%, 48% 100%, 26% 55%, 8% 100%);
+}
+
+.looi-burger__lettuce {
+  left: 10%;
+  top: 52%;
+  width: 80%;
+  height: 18%;
+  background: #35c74a;
+  border-radius: 999px;
+}
+
+.looi-burger__patty {
+  left: 13%;
+  top: 62%;
+  width: 74%;
+  height: 19%;
+  border-radius: 999px;
+  background: #6a2f1b;
+}
+
+.looi-burger__bun-bottom {
+  left: 12%;
+  bottom: 0;
+  width: 76%;
+  height: 25%;
+  border-radius: 12px 12px 999px 999px;
+  background: linear-gradient(#f4a63b, #d56d20);
+}
+
+.looi-eating-mouth {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(11% + clamp(75px, 8vw, 120px) - 2px);
+  width: clamp(52px, 5.2vw, 82px);
+  height: clamp(32px, 3.2vw, 50px);
+  opacity: 0;
+  transform: translate(-50%, 115px) scale(0.72);
+  pointer-events: none;
+}
+
+.looi-eating-mouth::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 72%;
+  height: 72%;
+  border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 8px rgba(95, 245, 255, 0.72));
+}
+
+.looi-eating-mouth::after {
+  content: "";
+  position: absolute;
+  left: 63%;
+  top: 39%;
+  width: 12%;
+  height: 48%;
+  border-radius: 999px;
+  background: var(--eye-core);
+  transform: rotate(12deg);
+  filter: drop-shadow(0 0 6px rgba(95, 245, 255, 0.65));
+}
+
+.looi-eating-crumb {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  top: 61%;
+  width: 8px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffd36d;
+  opacity: 0;
+  box-shadow: 0 0 8px rgba(255, 211, 109, 0.55);
+  pointer-events: none;
+}
+
+.looi-drink-can {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: 7%;
+  width: clamp(54px, 5.6vw, 88px);
+  height: clamp(98px, 10.4vw, 158px);
+  opacity: 0;
+  transform: translate(-50%, 130%) rotate(-13deg) scale(0.92);
+  border-radius: 13px 13px 20px 20px;
+  background:
+    linear-gradient(105deg, transparent 0 9%, rgba(255, 255, 255, 0.35) 10% 24%, transparent 25% 100%),
+    linear-gradient(90deg, #a53237 0 20%, #ffb5b5 21% 44%, #d74343 45% 72%, #8e272d 73%);
+  box-shadow: inset -8px 0 0 rgba(0, 0, 0, 0.16), 0 0 12px rgba(255, 80, 80, 0.3);
+  pointer-events: none;
+}
+
+.looi-drink-can::before {
+  content: "";
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: -8%;
+  height: 13%;
+  border-radius: 50%;
+  background: linear-gradient(#d7eef0, #7a9298);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18);
+}
+
+.looi-drink-can::after {
+  content: "COLA";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  color: white;
+  font: 900 clamp(10px, 1.25vw, 16px) / 1 "IBM Plex Sans", "Segoe UI", sans-serif;
+  letter-spacing: 0.04em;
+  transform: translate(-50%, -50%) rotate(88deg);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.looi-drink-straw {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  bottom: calc(7% + clamp(74px, 8vw, 118px));
+  width: clamp(135px, 14.5vw, 230px);
+  height: clamp(118px, 12.5vw, 196px);
+  opacity: 0;
+  transform: translate(-50%, 100px) rotate(-13deg);
+  pointer-events: none;
+  overflow: visible;
+}
+
+.looi-drink-straw__path {
+  fill: none;
+  stroke: #e8e8e8;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.22));
+}
+
+.looi-drink-straw__shadow {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.18);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: translate(3px, 2px);
+}
+
+.looi-drink-mouth {
+  position: absolute;
+  z-index: 9;
+  left: 54.2%;
+  top: 60.6%;
+  width: clamp(50px, 5vw, 84px);
+  height: clamp(38px, 3.8vw, 64px);
+  opacity: 0;
+  transform: translate(-50%, 22px) scale(0.7);
+  pointer-events: none;
+}
+
+.looi-drink-mouth::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 56%;
+  height: 56%;
+  border: clamp(7px, 0.75vw, 10px) solid #62eef3;
+  border-right: 0;
+  border-radius: 999px 0 0 999px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 8px rgba(95, 245, 255, 0.72));
+}
+
+.looi-sip-dot {
+  position: absolute;
+  z-index: 10;
+  left: 54.2%;
+  top: 60.6%;
+  width: clamp(6px, 0.7vw, 11px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #62eef3;
+  opacity: 0;
+  box-shadow: 0 0 8px rgba(95, 245, 255, 0.8);
+  pointer-events: none;
+}
+
+.looi-question-mark {
+  position: absolute;
+  z-index: 5;
+  left: 61%;
+  top: 32%;
+  width: clamp(70px, 7.5vw, 120px);
+  height: clamp(96px, 10vw, 160px);
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(18px) rotate(-12deg) scale(0.55);
+  pointer-events: none;
+  filter: drop-shadow(0 0 10px rgba(139, 120, 255, 0.85));
+}
+
+.looi-question-mark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.looi-question-mark__stroke {
+  fill: none;
+  stroke: #8b78ff;
+  stroke-width: 18;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.looi-question-mark__highlight {
+  fill: none;
+  stroke: #b7aaff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+}
+
+.looi-question-mark__dot {
+  fill: #8b78ff;
+  filter: drop-shadow(0 0 8px rgba(139, 120, 255, 0.9));
+}
+
+.looi-thought-dot {
+  position: absolute;
+  z-index: 5;
+  width: clamp(8px, 0.9vw, 14px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #b7aaff;
+  opacity: 0;
+  box-shadow: 0 0 8px rgba(139, 120, 255, 0.75);
+  pointer-events: none;
+}
+
+.looi-thought-dot--one {
+  left: 57.5%;
+  top: 39%;
+}
+
+.looi-thought-dot--two {
+  left: 59.2%;
+  top: 36.5%;
+}
+
+.looi-angry-spark {
+  position: absolute;
+  z-index: 5;
+  right: 25%;
+  top: 24%;
+  width: clamp(76px, 7.8vw, 126px);
+  height: clamp(76px, 7.8vw, 126px);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(14deg) scale(0.45);
+  pointer-events: none;
+  filter: drop-shadow(0 0 10px rgba(139, 120, 255, 0.9));
+}
+
+.looi-angry-spark svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.looi-angry-spark__main {
+  fill: none;
+  stroke: #8b78ff;
+  stroke-width: 11;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.looi-angry-spark__highlight {
+  fill: none;
+  stroke: #c7bfff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.looi-loving-hearts {
+  position: absolute;
+  z-index: 5;
+  right: 23%;
+  top: 22%;
+  width: clamp(90px, 9vw, 150px);
+  height: clamp(95px, 9.5vw, 158px);
+  pointer-events: none;
+}
+
+.looi-loving-heart {
+  position: absolute;
+  width: clamp(16px, 1.7vw, 28px);
+  height: clamp(16px, 1.7vw, 28px);
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.3);
+  background: #ff8bb5;
+  filter: drop-shadow(0 0 8px rgba(255, 139, 181, 0.85));
+}
+
+.looi-loving-heart::before,
+.looi-loving-heart::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.looi-loving-heart::before {
+  top: -50%;
+  left: 0;
+}
+
+.looi-loving-heart::after {
+  left: 50%;
+  top: 0;
+}
+
+.looi-loving-heart--one {
+  left: 20%;
+  top: 58%;
+}
+
+.looi-loving-heart--two {
+  left: 54%;
+  top: 34%;
+  width: clamp(13px, 1.35vw, 22px);
+  height: clamp(13px, 1.35vw, 22px);
+  background: #ffc1d6;
+}
+
+.looi-loving-heart--three {
+  left: 66%;
+  top: 68%;
+  width: clamp(10px, 1.05vw, 18px);
+  height: clamp(10px, 1.05vw, 18px);
+}
+
+.looi-loving-heart--four {
+  left: 40%;
+  top: 12%;
+  width: clamp(9px, 1vw, 16px);
+  height: clamp(9px, 1vw, 16px);
+  background: #ffc1d6;
+}
+
+.looi-shock-exclaim {
+  position: absolute;
+  z-index: 5;
+  right: 24%;
+  top: 27%;
+  width: clamp(44px, 4.6vw, 78px);
+  height: clamp(92px, 9.2vw, 150px);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(12deg) scale(0.45);
+  pointer-events: none;
+  filter: drop-shadow(0 0 9px rgba(255, 214, 77, 0.8));
+}
+
+.looi-shock-exclaim__bar {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: clamp(10px, 1vw, 16px);
+  height: 68%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff0a6, #ffd64d);
+  transform: translateX(-50%) rotate(9deg);
+}
+
+.looi-shock-exclaim__dot {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: clamp(14px, 1.4vw, 22px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #ffd64d;
+  transform: translateX(-50%);
+  box-shadow: 0 0 8px rgba(255, 214, 77, 0.8);
+}
+
+.looi-tell-mouth {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 60%;
+  width: clamp(40px, 4vw, 66px);
+  height: clamp(24px, 2.6vw, 42px);
+  opacity: 0;
+  transform: translate(-50%, 10px) scale(0.7);
+  pointer-events: none;
+}
+
+.looi-tell-mouth::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 68%;
+  height: 52%;
+  border: clamp(5px, 0.55vw, 7px) solid #71f7f5;
+  border-top: 0;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-radius: 0 0 999px 999px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 8px rgba(95, 245, 255, 0.65));
+}
+
+.looi-tell-mic {
+  position: absolute;
+  z-index: 7;
+  width: clamp(72px, 7vw, 115px);
+  height: clamp(150px, 14vw, 235px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.looi-tell-mic::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 48%;
+  height: 34%;
+  border-radius: 999px 999px 30px 30px;
+  background: linear-gradient(145deg, #9ed8dc, #6f9dac);
+  transform: translateX(-50%);
+  box-shadow: 0 0 8px rgba(180, 255, 255, 0.18);
+}
+
+.looi-tell-mic::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  width: 14%;
+  height: 64%;
+  border-radius: 999px;
+  background: #86cbd1;
+  transform: translateX(-50%);
+}
+
+.looi-tell-mic__flag {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 43%;
+  min-width: 86%;
+  padding: 7px 9px;
+  color: white;
+  text-align: center;
+  font: 900 clamp(10px, 1.2vw, 17px)/1 "IBM Plex Sans", "Segoe UI", sans-serif;
+  border-radius: 6px;
+  transform: translateX(-50%) rotate(-5deg);
+}
+
+.looi-tell-mic--left {
+  left: 31%;
+  bottom: 8%;
+  transform: translate(-120px, 180px) rotate(24deg);
+}
+
+.looi-tell-mic--left .looi-tell-mic__flag {
+  background: #ff9278;
+}
+
+.looi-tell-mic--right {
+  right: 31%;
+  bottom: 8%;
+  transform: translate(120px, 180px) rotate(-24deg);
+}
+
+.looi-tell-mic--right .looi-tell-mic__flag {
+  background: #41c7d8;
+}
+
+.looi-tell-spark {
+  position: absolute;
+  z-index: 8;
+  width: clamp(24px, 2.6vw, 44px);
+  aspect-ratio: 1;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 210, 0.85));
+}
+
+.looi-tell-spark::before,
+.looi-tell-spark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 18%;
+  border-radius: 999px;
+  background: #fff6b0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.looi-tell-spark::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.looi-tell-spark--one {
+  left: 43%;
+  top: 39%;
+}
+
+.looi-tell-spark--two {
+  right: 39%;
+  top: 37%;
+  width: clamp(18px, 2vw, 34px);
+}
+
+.looi-tell-spark--three {
+  left: 51%;
+  top: 30%;
+  width: clamp(14px, 1.6vw, 28px);
+}
+
+.looi-wake-side-light {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  width: clamp(42px, 7vw, 80px);
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.looi-wake-side-light--left {
+  left: 0;
+  transform: translateX(-60px);
+  background: linear-gradient(
+    90deg,
+    rgba(35, 220, 255, 0.78) 0%,
+    rgba(35, 220, 255, 0.52) 22%,
+    rgba(35, 220, 255, 0.24) 56%,
+    rgba(35, 220, 255, 0.08) 82%,
+    transparent 100%
+  );
+}
+
+.looi-wake-side-light--right {
+  right: 0;
+  transform: translateX(60px);
+  background: linear-gradient(
+    270deg,
+    rgba(35, 220, 255, 0.78) 0%,
+    rgba(35, 220, 255, 0.52) 22%,
+    rgba(35, 220, 255, 0.24) 56%,
+    rgba(35, 220, 255, 0.08) 82%,
+    transparent 100%
+  );
+}
+
+.looi-wake-spark {
+  position: absolute;
+  z-index: 9;
+  width: clamp(18px, 2vw, 34px);
+  aspect-ratio: 1;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px rgba(190, 255, 255, 0.9));
+}
+
+.looi-wake-spark::before,
+.looi-wake-spark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  height: 18%;
+  border-radius: 999px;
+  background: #bdfcff;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.looi-wake-spark::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.looi-wake-spark--one {
+  left: 23%;
+  top: 30%;
+}
+
+.looi-wake-spark--two {
+  right: 23%;
+  top: 31%;
+}
+
+.looi-wake-spark--three {
+  left: 50%;
+  top: 35%;
+  width: clamp(12px, 1.4vw, 24px);
+}
+
+.looi-kiss-mouth {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: 61%;
+  width: clamp(48px, 4.8vw, 78px);
+  height: clamp(36px, 3.8vw, 62px);
+  opacity: 0;
+  transform: translate(-50%, 10px) scale(0.5);
+  pointer-events: none;
+}
+
+.looi-kiss-mouth::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60%;
+  height: 58%;
+  border: clamp(6px, 0.65vw, 9px) solid #19d9ff;
+  border-right: 0;
+  border-radius: 999px 0 0 999px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 8px rgba(25, 217, 255, 0.78));
+}
+
+.looi-kiss-mouth::after {
+  content: "";
+  position: absolute;
+  left: 38%;
+  top: 50%;
+  width: 16%;
+  height: 16%;
+  border-radius: 50%;
+  background: #19d9ff;
+  opacity: 0.9;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 6px rgba(25, 217, 255, 0.7));
+}
+
+.looi-kiss-heart {
+  position: absolute;
+  z-index: 9;
+  left: 50%;
+  top: 58%;
+  width: clamp(28px, 3vw, 50px);
+  height: clamp(28px, 3vw, 50px);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-45deg) scale(0.25);
+  background: #ff8bb5;
+  filter: drop-shadow(0 0 12px rgba(255, 139, 181, 0.9));
+  pointer-events: none;
+}
+
+.looi-kiss-heart::before,
+.looi-kiss-heart::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.looi-kiss-heart::before {
+  top: -50%;
+  left: 0;
+}
+
+.looi-kiss-heart::after {
+  left: 50%;
+  top: 0;
+}
+
+.looi-photo-preview {
+  position: absolute;
+  z-index: 7;
+  right: max(24px, 8%);
+  top: max(24px, 13%);
+  width: clamp(220px, 27vw, 370px);
+  aspect-ratio: 1.18 / 1;
+  border: 4px solid #31d8ff;
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateX(80px) scale(0.86);
+  background: #111;
+  box-shadow: 0 0 12px rgba(49, 216, 255, 0.75);
+  pointer-events: none;
+  overflow: hidden;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.looi-photo-preview.is-visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.looi-photo-preview__image {
+  position: absolute;
+  left: 8%;
+  top: 8%;
+  width: 84%;
+  height: 58%;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #18222d;
+}
+
+.looi-photo-preview__actions {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 9%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8%;
+}
+
+.looi-photo-preview__button {
+  flex: 1;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  font: 700 14px/36px "IBM Plex Mono", "SFMono-Regular", monospace;
+  text-align: center;
+  color: white;
+}
+
+.looi-photo-preview__button--delete {
+  background: #d43d36;
+}
+
+.looi-photo-preview__button--save {
+  background: #2c8aaa;
+}
+
+.looi-flash-screen {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.looi-eye-system.is-taking-picture .looi-eyes {
+  animation: looiPictureEyesMove var(--photo-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-picture .looi-eye:first-child {
+  animation: looiPictureLeftEye var(--photo-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-picture .looi-eye:last-child {
+  animation: looiPictureRightEye var(--photo-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-picture .looi-camera-icon {
+  animation: looiCameraPop var(--photo-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-picture .looi-flash-screen {
+  animation: looiPhotoFlash var(--photo-time) linear both;
+}
+
+.looi-eye-system.is-follow-opening .looi-follow-shine,
+.looi-eye-system.is-following .looi-follow-shine {
+  opacity: 1;
+}
+
+.looi-eye-system.is-follow-stopping .looi-follow-shine {
+  opacity: 0;
+}
+
+.looi-eye-system.is-follow-opening .looi-eyes {
+  animation: looiFollowOpenEyes var(--follow-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-follow-opening .looi-follow-target {
+  animation: looiFollowTargetOpen var(--follow-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-following .looi-eyes {
+  animation: looiFollowEyesLoop 1800ms cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.looi-eye-system.is-following .looi-follow-target {
+  animation: looiFollowTargetLoop 1800ms cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+.looi-eye-system.is-follow-stopping .looi-eyes {
+  animation: looiFollowStopEyes var(--follow-stop-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-follow-stopping .looi-follow-target {
+  animation: looiFollowTargetStop var(--follow-stop-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eyes {
+  animation: looiEatEyes var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eye {
+  animation: looiEatEye var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-burger {
+  animation: looiBurgerBiteMove var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-burger__bite {
+  animation: looiBiteAppear var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eating-mouth {
+  animation: looiChew var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eating-mouth::before {
+  animation: looiMouthLine var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eating-mouth::after {
+  animation: looiMouthStem var(--bite-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eating-crumb--one {
+  animation: looiCrumbOne var(--bite-time) ease-out both;
+}
+
+.looi-eye-system.is-taking-bite .looi-eating-crumb--two {
+  animation: looiCrumbTwo var(--bite-time) ease-out both;
+}
+
+.looi-eye-system.is-bitten .looi-burger {
+  opacity: 1;
+  transform: translate(-50%, -4px) scale(0.96);
+}
+
+.looi-eye-system.is-bitten .looi-burger__bite {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.looi-eye-system.is-bitten .looi-eating-mouth {
+  opacity: 1;
+  transform: translate(-50%, 2px) scale(0.9);
+}
+
+.looi-eye-system.is-bitten .looi-eating-mouth::before {
+  left: 44%;
+  top: 42%;
+  width: 58%;
+  height: 34%;
+  border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+  border-top: 0;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-radius: 0 0 999px 999px;
+  transform: translate(-50%, -50%) rotate(8deg);
+}
+
+.looi-eye-system.is-bitten .looi-eating-mouth::after {
+  opacity: 1;
+  left: 66%;
+  top: 28%;
+  height: 54%;
+  transform: rotate(8deg) scaleY(1);
+}
+
+.looi-eye-system.is-finishing-burger .looi-eyes {
+  animation: looiEatEyes var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finishing-burger .looi-eye {
+  animation: looiEatEye var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finishing-burger .looi-burger {
+  animation: looiBurgerFinishMove var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finishing-burger .looi-burger__bite {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.looi-eye-system.is-finishing-burger .looi-eating-mouth {
+  animation: looiFinishChew var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finishing-burger .looi-eating-mouth::before {
+  animation: looiFinishMouthLine var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finishing-burger .looi-eating-mouth::after {
+  animation: looiFinishMouthStem var(--finish-burger-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-eyes {
+  animation: looiDrinkEyesIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-eye {
+  animation: looiDrinkEyeIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-eye__core,
+.looi-eye-system.is-drink-opening .looi-eye__glow {
+  animation: looiDrinkEyeShapeIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-drink-can {
+  animation: looiDrinkCanIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-drink-straw {
+  animation: looiDrinkStrawIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drink-opening .looi-drink-mouth {
+  animation: looiDrinkMouthIn var(--drink-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-drinking .looi-eyes {
+  transform: translateX(0) scaleY(0.96);
+}
+
+.looi-eye-system.is-drinking .looi-eye {
+  width: clamp(126px, 23vw, 265px);
+  height: clamp(70px, 9.4vw, 136px);
+  transform: translateY(-70px);
+}
+
+.looi-eye-system.is-drinking .looi-eye__core,
+.looi-eye-system.is-drinking .looi-eye__glow {
+  border-radius: 999px 999px 30px 30px / 100% 100% 24px 24px;
+}
+
+.looi-eye-system.is-drinking .looi-drink-can {
+  opacity: 1;
+  transform: translate(-50%, -18px) rotate(-13deg) scale(1);
+}
+
+.looi-eye-system.is-drinking .looi-drink-straw {
+  opacity: 1;
+  transform: translate(-50%, -18px) rotate(-13deg);
+}
+
+.looi-eye-system.is-drinking .looi-drink-mouth {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.looi-eye-system.is-drinking .looi-sip-dot--one {
+  animation: looiSipDotOne 1600ms ease-out infinite;
+}
+
+.looi-eye-system.is-drinking .looi-sip-dot--two {
+  animation: looiSipDotTwo 1600ms ease-out infinite;
+}
+
+.looi-eye-system.is-drinking .looi-sip-dot--three {
+  animation: looiSipDotThree 1600ms ease-out infinite;
+}
+
+.looi-eye-system.is-drinking .looi-sip-dot--four {
+  animation: looiSipDotFour 1600ms ease-out infinite;
+}
+
+.looi-eye-system.is-finish-drinking .looi-eyes {
+  animation: looiDrinkEyesOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finish-drinking .looi-eye {
+  animation: looiDrinkEyeOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finish-drinking .looi-eye__core,
+.looi-eye-system.is-finish-drinking .looi-eye__glow {
+  animation: looiDrinkEyeShapeOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finish-drinking .looi-drink-can {
+  animation: looiDrinkCanOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finish-drinking .looi-drink-straw {
+  animation: looiDrinkStrawOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-finish-drinking .looi-drink-mouth {
+  animation: looiDrinkMouthOut var(--finish-drink-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-eyes {
+  animation: looiCuriousEyes var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-eye:first-child {
+  animation: looiLeftCuriousEye var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-eye:last-child {
+  animation: looiRightCuriousEye var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-question-mark {
+  animation: looiQuestionPop var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-thought-dot--one {
+  animation: looiQuestionDotOne var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-questioning .looi-thought-dot--two {
+  animation: looiQuestionDotTwo var(--question-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-eyes {
+  animation: looiAngryShake var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-eye:first-child {
+  animation: looiLeftAngryEye var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-eye:last-child {
+  animation: looiRightAngryEye var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-eye:first-child .looi-eye__lid {
+  animation: looiLeftAngryLid var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-eye:last-child .looi-eye__lid {
+  animation: looiRightAngryLid var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-angry .looi-angry-spark {
+  animation: looiAngrySparkPop var(--angry-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-eyes {
+  animation: looiLoveEyesMove var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-eye {
+  animation: looiLoveEyeBounce var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-eye__core {
+  background: #18d6d0;
+}
+
+.looi-eye-system.is-loving .looi-eye__glow {
+  background: #1834ff;
+}
+
+.looi-eye-system.is-loving .looi-eye__love-lid {
+  animation: looiLoveLid var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-loving-heart--one {
+  animation: looiHeartFloatOne var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-loving-heart--two {
+  animation: looiHeartFloatTwo var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-loving-heart--three {
+  animation: looiHeartFloatThree var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-loving .looi-loving-heart--four {
+  animation: looiHeartFloatFour var(--love-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-shocked .looi-eyes {
+  animation: looiShockEyesMove var(--shock-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-shocked .looi-eye {
+  animation: looiShockEyePulse var(--shock-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-shocked .looi-shock-exclaim {
+  animation: looiExclaimPop var(--shock-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-shocked .looi-shock-exclaim__bar {
+  animation: looiExclaimBarWiggle var(--shock-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-shocked .looi-shock-exclaim__dot {
+  animation: looiExclaimDotPop var(--shock-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-eyes {
+  animation: looiTellEyesOpen var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-eye {
+  animation: looiTellEyeOpen var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-mouth {
+  animation: looiTellMouthOpen var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-mic--left {
+  animation: looiTellLeftMicOpen var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-mic--right {
+  animation: looiTellRightMicOpen var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-spark--one {
+  animation: looiTellSparkOne var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-spark--two {
+  animation: looiTellSparkTwo var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-opening .looi-tell-spark--three {
+  animation: looiTellSparkThree var(--tell-open-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-telling .looi-eyes {
+  transform: translateX(0) scaleY(1);
+}
+
+.looi-eye-system.is-telling .looi-eye {
+  transform: translateY(-14px) scale(0.96);
+}
+
+.looi-eye-system.is-telling .looi-tell-mouth {
+  animation: looiTellMouthLoop var(--tell-loop-time) cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+.looi-eye-system.is-telling .looi-tell-mic--left {
+  opacity: 1;
+  transform: translate(0, 0) rotate(24deg);
+}
+
+.looi-eye-system.is-telling .looi-tell-mic--right {
+  opacity: 1;
+  transform: translate(0, 0) rotate(-24deg);
+}
+
+.looi-eye-system.is-telling .looi-tell-spark--one {
+  animation: looiTellSparkOne var(--tell-loop-time) cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+.looi-eye-system.is-telling .looi-tell-spark--two {
+  animation: looiTellSparkTwo var(--tell-loop-time) cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+.looi-eye-system.is-telling .looi-tell-spark--three {
+  animation: looiTellSparkThree var(--tell-loop-time) cubic-bezier(0.2, 0.9, 0.25, 1) infinite;
+}
+
+.looi-eye-system.is-tell-finishing .looi-eyes {
+  animation: looiTellEyesFinish var(--tell-finish-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-finishing .looi-eye {
+  animation: looiTellEyeFinish var(--tell-finish-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-finishing .looi-tell-mouth {
+  animation: looiTellMouthFinish var(--tell-finish-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-finishing .looi-tell-mic--left {
+  animation: looiTellLeftMicFinish var(--tell-finish-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-tell-finishing .looi-tell-mic--right {
+  animation: looiTellRightMicFinish var(--tell-finish-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-kissing .looi-eyes {
+  animation: looiKissEyesMove var(--kiss-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-kissing .looi-eye {
+  animation: looiKissEye var(--kiss-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-kissing .looi-eye__love-lid {
+  animation: looiKissLid var(--kiss-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-kissing .looi-kiss-mouth {
+  animation: looiKissMouth var(--kiss-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-kissing .looi-kiss-heart {
+  animation: looiBigKissHeart var(--kiss-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-wake-activating .looi-wake-side-light--left {
+  animation: looiWakeLeftLight var(--wake-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-wake-activating .looi-wake-side-light--right {
+  animation: looiWakeRightLight var(--wake-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-wake-activating .looi-wake-spark--one {
+  animation: looiWakeSparkOne var(--wake-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-wake-activating .looi-wake-spark--two {
+  animation: looiWakeSparkTwo var(--wake-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eye-system.is-wake-activating .looi-wake-spark--three {
+  animation: looiWakeSparkThree var(--wake-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eyes[data-expression="happy"] {
+  --eye-core: #c7fff3;
+  --eye-glow: #1f7dff;
+}
+
+.looi-eyes[data-expression="curious"],
+.looi-eyes[data-expression="attentive"] {
+  --eye-core: #d5fbff;
+  --eye-glow: #2632ff;
+}
+
+.looi-eyes[data-expression="scared"] {
+  --eye-core: #e9fcff;
+  --eye-glow: #4a4dff;
+}
+
+.looi-eyes[data-expression="shy"],
+.looi-eyes[data-expression="sad"] {
+  --eye-core: #bceaff;
+  --eye-glow: #3148c9;
+}
+
+.looi-eyes.is-speaking .looi-eye__glow {
+  opacity: 1;
+  animation: looiSpeakingGlow 520ms ease-in-out infinite alternate;
+}
+
+.looi-eyes.is-speaking .looi-eye__core {
+  box-shadow: 0 0 calc(8px + 8px * var(--expression-intensity)) rgba(189, 243, 255, 0.32);
+}
+
+.looi-eyes.is-blinking .looi-eye {
+  animation: looiEyeBlink var(--blink-time) ease-in-out both;
+}
+
+.looi-eyes.is-blinking .looi-eye__core,
+.looi-eyes.is-blinking .looi-eye__glow {
+  animation: looiShapeBlink var(--blink-time) ease-in-out both;
+}
+
+.looi-eyes.is-blinking .looi-eye__glow {
+  animation-name: looiShapeBlink, looiGlowBlink;
+  animation-duration: var(--blink-time), var(--blink-time);
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-fill-mode: both, both;
+}
+
+.looi-eyes.is-blinking .looi-eye__scan-line {
+  animation: looiScanBlink var(--blink-time) ease-in-out both;
+}
+
+.looi-eyes.is-soft-closing .looi-eye {
+  animation: looiEyeSoftClose var(--soft-close-time) ease-in-out both;
+}
+
+.looi-eyes.is-soft-closing .looi-eye__core,
+.looi-eyes.is-soft-closing .looi-eye__glow {
+  animation: looiShapeSoftClose var(--soft-close-time) ease-in-out both;
+}
+
+.looi-eyes.is-soft-closing .looi-eye__glow {
+  animation-name: looiShapeSoftClose, looiGlowSoftClose;
+  animation-duration: var(--soft-close-time), var(--soft-close-time);
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-fill-mode: both, both;
+}
+
+.looi-eyes.is-sleeping .looi-eye {
+  animation: looiEyeSleep var(--sleep-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eyes.is-sleeping .looi-eye__core,
+.looi-eyes.is-sleeping .looi-eye__glow {
+  animation: looiShapeSleep var(--sleep-time) cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+.looi-eyes.is-sleeping .looi-eye__glow {
+  animation-name: looiShapeSleep, looiGlowSleep;
+  animation-duration: var(--sleep-time), var(--sleep-time);
+  animation-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1), cubic-bezier(0.2, 0.9, 0.25, 1);
+  animation-fill-mode: both, both;
+}
+
+.looi-eyes.is-sleeping .looi-eye__scan-line {
+  opacity: 0;
+}
+
+@keyframes looiEyeBlink {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px);
+  }
+
+  42%,
+  58% {
+    width: clamp(150px, 32vw, 305px);
+    height: clamp(18px, 3.4vw, 34px);
+    transform: translateY(-10px);
+  }
+
+  72% {
+    width: clamp(138px, 29vw, 282px);
+    height: clamp(44px, 7vw, 72px);
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes looiEyeSoftClose {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px);
+  }
+
+  45%,
+  60% {
+    width: clamp(138px, 27vw, 274px);
+    height: clamp(58px, 10vw, 110px);
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes looiEyeSleep {
+  0% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px);
+  }
+
+  45% {
+    width: clamp(138px, 27vw, 274px);
+    height: clamp(58px, 10vw, 110px);
+    transform: translateY(-4px);
+  }
+
+  100% {
+    width: clamp(148px, 30vw, 292px);
+    height: clamp(24px, 4vw, 44px);
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes looiShapeBlink {
+  0%,
+  100% {
+    border-radius: 50%;
+  }
+
+  42%,
+  72% {
+    border-radius: 999px;
+  }
+}
+
+@keyframes looiShapeSoftClose {
+  0%,
+  100% {
+    border-radius: 50%;
+  }
+
+  45%,
+  60% {
+    border-radius: 999px;
+  }
+}
+
+@keyframes looiShapeSleep {
+  0% {
+    border-radius: 50%;
+  }
+
+  45% {
+    border-radius: 4px 4px 999px 999px / 4px 4px 100% 100%;
+  }
+
+  100% {
+    border-radius: 8px 8px 999px 999px / 8px 8px 100% 100%;
+  }
+}
+
+@keyframes looiGlowBlink {
+  0%,
+  100% {
+    transform: translate(calc(var(--glow-dir) * 18px), 24px);
+    filter: blur(5px);
+    opacity: 0.94;
+  }
+
+  42%,
+  58% {
+    transform: translate(calc(var(--glow-dir) * 16px), 12px);
+    filter: blur(5px);
+    opacity: 0.88;
+  }
+
+  72% {
+    transform: translate(calc(var(--glow-dir) * 17px), 16px);
+    filter: blur(5px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes looiGlowSoftClose {
+  0%,
+  100% {
+    transform: translate(calc(var(--glow-dir) * 18px), 24px);
+    filter: blur(5px);
+    opacity: 0.94;
+  }
+
+  45%,
+  60% {
+    transform: translate(calc(var(--glow-dir) * 17px), 20px);
+    filter: blur(5px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes looiGlowSleep {
+  0% {
+    transform: translate(calc(var(--glow-dir) * 18px), 24px);
+    filter: blur(5px);
+    opacity: 0.94;
+  }
+
+  45% {
+    transform: translate(calc(var(--glow-dir) * 17px), 18px);
+    filter: blur(5px);
+    opacity: 0.9;
+  }
+
+  100% {
+    transform: translate(calc(var(--glow-dir) * 14px), 12px);
+    filter: blur(5px);
+    opacity: 0.9;
+  }
+}
+
+@keyframes looiWakeLeftLight {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  34% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  72% {
+    opacity: 0.9;
+    transform: translateX(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+}
+
+@keyframes looiWakeRightLight {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+
+  34% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  72% {
+    opacity: 0.9;
+    transform: translateX(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+}
+
+@keyframes looiWakeSparkOne {
+  0%,
+  34%,
+  62%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0);
+  }
+
+  44% {
+    opacity: 1;
+    transform: scale(1.15) rotate(18deg);
+  }
+
+  52% {
+    opacity: 0.75;
+    transform: scale(0.85) rotate(-12deg);
+  }
+}
+
+@keyframes looiWakeSparkTwo {
+  0%,
+  42%,
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0);
+  }
+
+  52% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-16deg);
+  }
+
+  62% {
+    opacity: 0.7;
+    transform: scale(0.85) rotate(12deg);
+  }
+}
+
+@keyframes looiWakeSparkThree {
+  0%,
+  26%,
+  48%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0);
+  }
+
+  34% {
+    opacity: 0.9;
+    transform: scale(1) rotate(14deg);
+  }
+}
+
+@keyframes looiFollowOpenEyes {
+  0% {
+    transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  }
+
+  35% {
+    transform: translateX(0) scaleY(0.9);
+  }
+
+  70% {
+    transform: translateX(-22px) scaleY(1.04);
+  }
+
+  100% {
+    transform: translateX(-52px) scaleY(0.96);
+  }
+}
+
+@keyframes looiFollowTargetOpen {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 130%) rotate(-38deg) scale(0.9);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translate(-50%, 8%) rotate(-38deg) scale(1.04);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(calc(-50% - 70px), 0) rotate(-46deg) scale(1);
+  }
+}
+
+@keyframes looiFollowEyesLoop {
+  0%,
+  100% {
+    transform: translateX(-52px) scaleY(0.96);
+  }
+
+  25% {
+    transform: translateX(-18px) scaleY(1);
+  }
+
+  50% {
+    transform: translateX(52px) scaleY(0.96);
+  }
+
+  75% {
+    transform: translateX(18px) scaleY(1);
+  }
+}
+
+@keyframes looiFollowTargetLoop {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(calc(-50% - 70px), 0) rotate(-46deg) scale(1);
+  }
+
+  25% {
+    opacity: 1;
+    transform: translate(calc(-50% - 24px), -8%) rotate(-34deg) scale(0.98);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(calc(-50% + 70px), 0) rotate(-30deg) scale(1);
+  }
+
+  75% {
+    opacity: 1;
+    transform: translate(calc(-50% + 24px), -8%) rotate(-42deg) scale(0.98);
+  }
+}
+
+@keyframes looiFollowStopEyes {
+  0% {
+    transform: translateX(52px) scaleY(0.96);
+  }
+
+  45% {
+    transform: translateX(0) scaleY(0.88);
+  }
+
+  100% {
+    transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  }
+}
+
+@keyframes looiFollowTargetStop {
+  0% {
+    opacity: 1;
+    transform: translate(calc(-50% + 70px), 0) rotate(-30deg) scale(1);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translate(-50%, -4%) rotate(-38deg) scale(1.03);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 130%) rotate(-38deg) scale(0.9);
+  }
+}
+
+@keyframes looiEatEyes {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  16%,
+  86% {
+    transform: translateX(0) scaleY(0.94);
+  }
+
+  30%,
+  76% {
+    transform: translateX(0) scaleY(1);
+  }
+}
+
+@keyframes looiEatEye {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) scale(1);
+  }
+
+  20%,
+  74% {
+    width: clamp(116px, 21vw, 232px);
+    height: clamp(106px, 19vw, 214px);
+    transform: translateY(-22px) scale(0.96);
+  }
+
+  42%,
+  56% {
+    width: clamp(124px, 23vw, 248px);
+    height: clamp(102px, 18vw, 204px);
+    transform: translateY(-16px) scale(1.02);
+  }
+}
+
+@keyframes looiBurgerBiteMove {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate(-50%, 120%) scale(0.86);
+  }
+
+  24% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  36% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.02);
+  }
+
+  46% {
+    opacity: 1;
+    transform: translate(-50%, -12px) scale(1.04);
+  }
+
+  56%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -4px) scale(0.96);
+  }
+}
+
+@keyframes looiBurgerFinishMove {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -4px) scale(0.96);
+  }
+
+  24% {
+    opacity: 1;
+    transform: translate(-50%, -10px) scale(0.78);
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate(-50%, -8px) scale(0.55);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -14px) scale(0.28);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -30px) scale(0.04);
+  }
+}
+
+@keyframes looiBiteAppear {
+  0%,
+  43% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+
+  49%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes looiChew {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translate(-50%, 115px) scale(0.72);
+  }
+
+  24%,
+  40% {
+    opacity: 1;
+    transform: translate(-50%, 6px) scale(1);
+  }
+
+  48%,
+  56% {
+    opacity: 1;
+    transform: translate(-50%, 14px) scale(1);
+  }
+
+  64%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(0.9);
+  }
+}
+
+@keyframes looiFinishChew {
+  0%,
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(0.9);
+  }
+
+  24%,
+  36% {
+    opacity: 1;
+    transform: translate(-50%, 12px) scale(1, 0.48);
+  }
+
+  46%,
+  58% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(0.9, 0.58);
+  }
+
+  68%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, 12px) scale(0.92, 0.42);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -4px) scale(0.7);
+  }
+}
+
+@keyframes looiMouthLine {
+  0%,
+  42% {
+    left: 50%;
+    top: 54%;
+    width: 72%;
+    height: 72%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  48%,
+  56% {
+    left: 50%;
+    top: 58%;
+    width: 72%;
+    height: 16%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-top: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+    border-radius: 0 0 999px 999px;
+    transform: translate(-50%, -50%);
+  }
+
+  64%,
+  100% {
+    left: 44%;
+    top: 42%;
+    width: 58%;
+    height: 34%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-top: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+    border-radius: 0 0 999px 999px;
+    transform: translate(-50%, -50%) rotate(8deg);
+  }
+}
+
+@keyframes looiMouthStem {
+  0%,
+  44% {
+    opacity: 0;
+    left: 66%;
+    top: 38%;
+    height: 44%;
+    transform: rotate(12deg) scaleY(0.4);
+  }
+
+  58%,
+  100% {
+    opacity: 1;
+    left: 66%;
+    top: 28%;
+    height: 54%;
+    transform: rotate(8deg) scaleY(1);
+  }
+}
+
+@keyframes looiFinishMouthLine {
+  0%,
+  42% {
+    left: 44%;
+    top: 42%;
+    width: 58%;
+    height: 34%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-top: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+    border-radius: 0 0 999px 999px;
+    transform: translate(-50%, -50%) rotate(8deg);
+  }
+
+  48%,
+  76% {
+    left: 50%;
+    top: 58%;
+    width: 72%;
+    height: 16%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-top: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+    border-radius: 0 0 999px 999px;
+    transform: translate(-50%, -50%);
+  }
+
+  100% {
+    left: 44%;
+    top: 42%;
+    width: 58%;
+    height: 34%;
+    border: clamp(5px, 0.6vw, 8px) solid var(--eye-core);
+    border-top: 0;
+    border-left-color: transparent;
+    border-right-color: transparent;
+    border-radius: 0 0 999px 999px;
+    transform: translate(-50%, -50%) rotate(8deg);
+  }
+}
+
+@keyframes looiFinishMouthStem {
+  0%,
+  42% {
+    opacity: 1;
+    left: 66%;
+    top: 28%;
+    height: 54%;
+    transform: rotate(8deg) scaleY(1);
+  }
+
+  48%,
+  76%,
+  100% {
+    opacity: 0;
+    left: 66%;
+    top: 38%;
+    height: 44%;
+    transform: rotate(12deg) scaleY(0.4);
+  }
+}
+
+@keyframes looiCrumbOne {
+  0%,
+  46% {
+    opacity: 0;
+    transform: translate(-20px, -10px) scale(0.4);
+  }
+
+  54% {
+    opacity: 1;
+    transform: translate(-48px, -28px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-78px, 10px) scale(0.45);
+  }
+}
+
+@keyframes looiCrumbTwo {
+  0%,
+  48% {
+    opacity: 0;
+    transform: translate(18px, -8px) scale(0.4);
+  }
+
+  56% {
+    opacity: 1;
+    transform: translate(52px, -24px) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(82px, 14px) scale(0.45);
+  }
+}
+
+@keyframes looiDrinkEyesIn {
+  0% {
+    transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  }
+
+  100% {
+    transform: translateX(0) scaleY(0.96);
+  }
+}
+
+@keyframes looiDrinkEyeIn {
+  0% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px);
+  }
+
+  100% {
+    width: clamp(126px, 23vw, 265px);
+    height: clamp(70px, 9.4vw, 136px);
+    transform: translateY(-70px);
+  }
+}
+
+@keyframes looiDrinkEyeShapeIn {
+  0% {
+    border-radius: 50%;
+  }
+
+  100% {
+    border-radius: 999px 999px 30px 30px / 100% 100% 24px 24px;
+  }
+}
+
+@keyframes looiDrinkCanIn {
+  0%,
+  15% {
+    opacity: 0;
+    transform: translate(-50%, 130%) rotate(-13deg) scale(0.92);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -18px) rotate(-13deg) scale(1);
+  }
+}
+
+@keyframes looiDrinkStrawIn {
+  0%,
+  25% {
+    opacity: 0;
+    transform: translate(-50%, 100px) rotate(-13deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -18px) rotate(-13deg);
+  }
+}
+
+@keyframes looiDrinkMouthIn {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translate(-50%, 22px) scale(0.7);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes looiDrinkEyesOut {
+  0% {
+    transform: translateX(0) scaleY(0.96);
+  }
+
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+}
+
+@keyframes looiDrinkEyeOut {
+  0% {
+    width: clamp(126px, 23vw, 265px);
+    height: clamp(70px, 9.4vw, 136px);
+    transform: translateY(-70px);
+  }
+
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes looiDrinkEyeShapeOut {
+  0% {
+    border-radius: 999px 999px 30px 30px / 100% 100% 24px 24px;
+  }
+
+  100% {
+    border-radius: 50%;
+  }
+}
+
+@keyframes looiDrinkCanOut {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -18px) rotate(-13deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 115%) rotate(-13deg) scale(0.94);
+  }
+}
+
+@keyframes looiDrinkStrawOut {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -18px) rotate(-13deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 86px) rotate(-13deg);
+  }
+}
+
+@keyframes looiDrinkMouthOut {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 22px) scale(0.7);
+  }
+}
+
+@keyframes looiSipDotOne {
+  0%,
+  40% {
+    opacity: 0;
+    transform: translate(-22px, 10px) scale(0.4);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-42px, -10px) scale(1);
+  }
+
+  72%,
+  100% {
+    opacity: 0;
+    transform: translate(-60px, 12px) scale(0.45);
+  }
+}
+
+@keyframes looiSipDotTwo {
+  0%,
+  52% {
+    opacity: 0;
+    transform: translate(18px, 8px) scale(0.4);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translate(34px, -8px) scale(0.9);
+  }
+
+  80%,
+  100% {
+    opacity: 0;
+    transform: translate(50px, 14px) scale(0.45);
+  }
+}
+
+@keyframes looiSipDotThree {
+  0%,
+  36% {
+    opacity: 0;
+    transform: translate(-6px, 4px) scale(0.35);
+  }
+
+  46% {
+    opacity: 0.95;
+    transform: translate(-22px, -18px) scale(0.75);
+  }
+
+  66%,
+  100% {
+    opacity: 0;
+    transform: translate(-34px, -4px) scale(0.35);
+  }
+}
+
+@keyframes looiSipDotFour {
+  0%,
+  58% {
+    opacity: 0;
+    transform: translate(2px, 6px) scale(0.3);
+  }
+
+  68% {
+    opacity: 0.9;
+    transform: translate(20px, -18px) scale(0.65);
+  }
+
+  84%,
+  100% {
+    opacity: 0;
+    transform: translate(34px, -2px) scale(0.3);
+  }
+}
+
+@keyframes looiCuriousEyes {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  24% {
+    transform: translateX(16px) scaleY(0.96);
+  }
+
+  54% {
+    transform: translateX(38px) scaleY(1.02);
+  }
+
+  78% {
+    transform: translateX(28px) scaleY(0.98);
+  }
+}
+
+@keyframes looiLeftCuriousEye {
+  0%,
+  100% {
+    transform: translateY(-10px) scale(1);
+  }
+
+  28%,
+  74% {
+    transform: translateY(-6px) scale(0.94);
+  }
+}
+
+@keyframes looiRightCuriousEye {
+  0%,
+  100% {
+    transform: translateY(-10px) scale(1);
+  }
+
+  28% {
+    transform: translateY(-14px) scale(1.03);
+  }
+
+  54%,
+  74% {
+    transform: translateY(-20px) scale(1.08);
+  }
+}
+
+@keyframes looiQuestionPop {
+  0%,
+  16% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(22px) rotate(-22deg) scale(0.35);
+  }
+
+  34% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-4px) rotate(10deg) scale(1.08);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0) rotate(-8deg) scale(1);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-8px) rotate(6deg) scale(1.03);
+  }
+
+  88%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-18px) rotate(14deg) scale(0.75);
+  }
+}
+
+@keyframes looiQuestionDotOne {
+  0%,
+  20%,
+  90%,
+  100% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.4);
+  }
+
+  36%,
+  74% {
+    opacity: 0.8;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes looiQuestionDotTwo {
+  0%,
+  26%,
+  90%,
+  100% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.4);
+  }
+
+  44%,
+  76% {
+    opacity: 0.75;
+    transform: translateY(0) scale(0.8);
+  }
+}
+
+@keyframes looiAngryShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  18% {
+    transform: translateX(-8px);
+  }
+
+  26% {
+    transform: translateX(8px);
+  }
+
+  34% {
+    transform: translateX(-5px);
+  }
+
+  44%,
+  78% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes looiLeftAngryEye {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) rotate(0deg);
+  }
+
+  28%,
+  82% {
+    width: clamp(132px, 19vw, 220px);
+    height: clamp(96px, 14.5vw, 180px);
+    transform: translateY(-4px) rotate(0deg);
+  }
+}
+
+@keyframes looiRightAngryEye {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) rotate(0deg);
+  }
+
+  28%,
+  82% {
+    width: clamp(132px, 19vw, 220px);
+    height: clamp(96px, 14.5vw, 180px);
+    transform: translateY(-4px) rotate(0deg);
+  }
+}
+
+@keyframes looiLeftAngryLid {
+  0%,
+  100% {
+    transform: translateY(-120%) rotate(0deg);
+  }
+
+  28%,
+  82% {
+    transform: translateY(-22%) translateX(2%) rotate(15deg);
+  }
+}
+
+@keyframes looiRightAngryLid {
+  0%,
+  100% {
+    transform: translateY(-120%) rotate(0deg);
+  }
+
+  28%,
+  82% {
+    transform: translateY(-22%) translateX(-2%) rotate(-15deg);
+  }
+}
+
+@keyframes looiAngrySparkPop {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.3);
+  }
+
+  32% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(16deg) scale(1.22);
+  }
+
+  46% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-8deg) scale(1);
+  }
+
+  62%,
+  78% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(12deg) scale(1.08);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-14px) rotate(22deg) scale(0.78);
+  }
+}
+
+@keyframes looiLoveEyesMove {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  18% {
+    transform: translateX(10px) scaleY(0.94);
+  }
+
+  36%,
+  78% {
+    transform: translateX(18px) scaleY(1);
+  }
+}
+
+@keyframes looiLoveEyeBounce {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) scale(1);
+  }
+
+  22%,
+  82% {
+    width: clamp(136px, 19vw, 220px);
+    height: clamp(92px, 13vw, 160px);
+    transform: translateY(-4px) scale(0.96);
+  }
+
+  42%,
+  58% {
+    transform: translateY(-10px) scale(1.03);
+  }
+}
+
+@keyframes looiLoveLid {
+  0%,
+  100% {
+    transform: translateY(125%);
+  }
+
+  22%,
+  82% {
+    transform: translateY(18%);
+  }
+}
+
+@keyframes looiHeartFloatOne {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translateY(16px) rotate(-45deg) scale(0.3);
+  }
+
+  34% {
+    opacity: 1;
+    transform: translateY(0) rotate(-45deg) scale(1);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translateY(-18px) rotate(-45deg) scale(0.95);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-44px) rotate(-45deg) scale(0.55);
+  }
+}
+
+@keyframes looiHeartFloatTwo {
+  0%,
+  28% {
+    opacity: 0;
+    transform: translateY(14px) rotate(-45deg) scale(0.25);
+  }
+
+  44% {
+    opacity: 1;
+    transform: translateY(0) rotate(-45deg) scale(1);
+  }
+
+  80% {
+    opacity: 0.85;
+    transform: translateY(-24px) rotate(-45deg) scale(0.85);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) rotate(-45deg) scale(0.45);
+  }
+}
+
+@keyframes looiHeartFloatThree {
+  0%,
+  36% {
+    opacity: 0;
+    transform: translateY(10px) rotate(-45deg) scale(0.25);
+  }
+
+  52% {
+    opacity: 0.9;
+    transform: translateY(0) rotate(-45deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-38px) rotate(-45deg) scale(0.4);
+  }
+}
+
+@keyframes looiHeartFloatFour {
+  0%,
+  46% {
+    opacity: 0;
+    transform: translateY(10px) rotate(-45deg) scale(0.2);
+  }
+
+  60% {
+    opacity: 0.8;
+    transform: translateY(0) rotate(-45deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) rotate(-45deg) scale(0.35);
+  }
+}
+
+@keyframes looiShockEyesMove {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  14% {
+    transform: translateX(-10px) scaleY(1.05);
+  }
+
+  24% {
+    transform: translateX(10px) scaleY(0.96);
+  }
+
+  36%,
+  78% {
+    transform: translateX(0) scaleY(1);
+  }
+}
+
+@keyframes looiShockEyePulse {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) scale(1);
+  }
+
+  18% {
+    width: clamp(142px, 20vw, 230px);
+    height: clamp(118px, 17vw, 205px);
+    transform: translateY(-16px) scale(1.08);
+  }
+
+  34%,
+  76% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) scale(1);
+  }
+}
+
+@keyframes looiExclaimPop {
+  0%,
+  16% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(16px) rotate(18deg) scale(0.25);
+  }
+
+  28% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-6px) rotate(-10deg) scale(1.18);
+  }
+
+  42% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(0) rotate(12deg) scale(0.96);
+  }
+
+  62%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(-4px) rotate(8deg) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(-18px) rotate(20deg) scale(0.72);
+  }
+}
+
+@keyframes looiExclaimBarWiggle {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(9deg);
+  }
+
+  28% {
+    transform: translateX(-50%) rotate(-8deg);
+  }
+
+  42% {
+    transform: translateX(-50%) rotate(14deg);
+  }
+
+  62% {
+    transform: translateX(-50%) rotate(5deg);
+  }
+}
+
+@keyframes looiExclaimDotPop {
+  0%,
+  20% {
+    transform: translateX(-50%) scale(0.4);
+  }
+
+  30% {
+    transform: translateX(-50%) scale(1.25);
+  }
+
+  42%,
+  80% {
+    transform: translateX(-50%) scale(1);
+  }
+
+  100% {
+    transform: translateX(-50%) scale(0.55);
+  }
+}
+
+@keyframes looiTellEyesOpen {
+  0% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  40% {
+    transform: translateX(-10px) scaleY(0.98);
+  }
+
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+}
+
+@keyframes looiTellEyeOpen {
+  0% {
+    transform: translateY(-18px) scale(1);
+  }
+
+  100% {
+    transform: translateY(-14px) scale(0.96);
+  }
+}
+
+@keyframes looiTellMouthOpen {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.7);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.12, 1);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1, 0.55);
+  }
+}
+
+@keyframes looiTellMouthLoop {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1, 0.55);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.12, 1);
+  }
+}
+
+@keyframes looiTellMouthFinish {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1, 0.55);
+  }
+
+  45% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.05, 0.65);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.7);
+  }
+}
+
+@keyframes looiTellEyesFinish {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+}
+
+@keyframes looiTellEyeFinish {
+  0% {
+    transform: translateY(-14px) scale(0.96);
+  }
+
+  100% {
+    transform: translateY(-18px) scale(1);
+  }
+}
+
+@keyframes looiTellLeftMicOpen {
+  0% {
+    opacity: 0;
+    transform: translate(-120px, 180px) rotate(24deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(24deg);
+  }
+}
+
+@keyframes looiTellRightMicOpen {
+  0% {
+    opacity: 0;
+    transform: translate(120px, 180px) rotate(-24deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(-24deg);
+  }
+}
+
+@keyframes looiTellLeftMicFinish {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(24deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-90px, 150px) rotate(24deg);
+  }
+}
+
+@keyframes looiTellRightMicFinish {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(-24deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(90px, 150px) rotate(-24deg);
+  }
+}
+
+@keyframes looiTellSparkOne {
+  0%,
+  36%,
+  54%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4) rotate(0);
+  }
+
+  44% {
+    opacity: 1;
+    transform: scale(1.15) rotate(20deg);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(0.85) rotate(-12deg);
+  }
+}
+
+@keyframes looiTellSparkTwo {
+  0%,
+  50%,
+  68%,
+  100% {
+    opacity: 0;
+    transform: scale(0.35) rotate(0);
+  }
+
+  56% {
+    opacity: 1;
+    transform: scale(1) rotate(-18deg);
+  }
+
+  62% {
+    opacity: 0.75;
+    transform: scale(0.8) rotate(12deg);
+  }
+}
+
+@keyframes looiTellSparkThree {
+  0%,
+  28%,
+  42%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0);
+  }
+
+  34% {
+    opacity: 0.9;
+    transform: scale(1) rotate(18deg);
+  }
+}
+
+@keyframes looiKissEyesMove {
+  0%,
+  100% {
+    transform: translateX(0) scaleY(1);
+  }
+
+  24%,
+  72% {
+    transform: translateX(-26px) scaleY(0.98);
+  }
+}
+
+@keyframes looiKissEye {
+  0%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-18px) scale(1);
+  }
+
+  26%,
+  76% {
+    width: clamp(136px, 19vw, 220px);
+    height: clamp(92px, 13vw, 160px);
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+
+@keyframes looiKissLid {
+  0%,
+  100% {
+    transform: translateY(125%);
+  }
+
+  26%,
+  76% {
+    transform: translateY(14%);
+  }
+}
+
+@keyframes looiKissMouth {
+  0%,
+  12% {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(0.3) rotate(-8deg);
+  }
+
+  22% {
+    opacity: 1;
+    transform: translate(-50%, 2px) scale(1.15, 0.9) rotate(0deg);
+  }
+
+  34% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(0.82, 1.08) rotate(0deg);
+  }
+
+  46% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(0.92) rotate(0deg);
+  }
+
+  64%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.25) rotate(8deg);
+  }
+}
+
+@keyframes looiBigKissHeart {
+  0%,
+  38% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(0.25);
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(1);
+  }
+
+  72% {
+    opacity: 0.65;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(10);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(34);
+  }
+}
+
+@keyframes looiPictureEyesMove {
+  0%,
+  12% {
+    transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  }
+
+  24%,
+  48% {
+    transform: translateX(-60px) scaleY(0.98);
+  }
+
+  58%,
+  72% {
+    transform: translateX(-85px) scaleY(0.9);
+  }
+
+  100% {
+    transform: translateX(var(--look-x)) scaleY(var(--look-scale-y));
+  }
+}
+
+@keyframes looiPictureLeftEye {
+  0%,
+  30%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) rotate(0deg);
+  }
+
+  58%,
+  72% {
+    width: clamp(118px, 22vw, 230px);
+    height: clamp(34px, 5vw, 62px);
+    transform: translateY(-25px) rotate(10deg);
+  }
+}
+
+@keyframes looiPictureRightEye {
+  0%,
+  30%,
+  100% {
+    width: clamp(126px, 25vw, 258px);
+    height: clamp(104px, 20vw, 214px);
+    transform: translateY(-10px) rotate(0deg);
+  }
+
+  58%,
+  72% {
+    width: clamp(120px, 22vw, 232px);
+    height: clamp(88px, 16vw, 180px);
+    transform: translateY(-10px) rotate(0deg);
+  }
+}
+
+@keyframes looiCameraPop {
+  0%,
+  16% {
+    opacity: 0;
+    transform: translate(-50%, 140%) scale(0.9);
+  }
+
+  28%,
+  72% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  86%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 40%) scale(0.95);
+  }
+}
+
+@keyframes looiPhotoFlash {
+  0%,
+  64% {
+    opacity: 0;
+  }
+
+  66% {
+    opacity: 1;
+  }
+
+  73%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes looiScanBlink {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(0.2);
+  }
+
+  42%,
+  58% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scaleX(1);
+  }
+
+  72% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scaleX(0.8);
+  }
+}
+
+@keyframes looiSpeakingGlow {
+  from {
+    filter: blur(5px);
+    transform: translate(calc(var(--glow-dir) * 18px), 24px) scale(1);
+  }
+
+  to {
+    filter: blur(7px);
+    transform: translate(calc(var(--glow-dir) * 18px), 24px) scale(1.035);
+  }
+}
+
+@media (max-width: 700px) {
+  .looi-eyes {
+    gap: clamp(42px, 12vw, 90px);
+  }
+
+  .looi-eye {
+    width: clamp(108px, 34vw, 180px);
+    height: clamp(88px, 28vw, 150px);
+  }
+}
+
+.control-panel {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.panel-card {
+  min-width: 0;
+  max-width: 100%;
+  padding: 1rem;
+  border-radius: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.title-card {
+  order: 1;
+}
+
+.settings-nav {
+  order: 2;
+  position: sticky;
+  top: 4.6rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.55rem;
+  overflow-x: auto;
+  border: 1px solid rgba(122, 193, 255, 0.16);
+  border-radius: 1rem;
+  background: rgba(5, 8, 16, 0.94);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-nav a {
+  flex: 0 0 auto;
+  padding: 0.52rem 0.68rem;
+  border: 1px solid rgba(122, 193, 255, 0.16);
+  border-radius: 0.75rem;
+  background: rgba(8, 13, 23, 0.78);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.settings-nav a:hover,
+.settings-nav a:focus-visible {
+  border-color: rgba(144, 231, 255, 0.5);
+  color: var(--glow-strong);
+}
+
+.control-panel > [id] {
+  scroll-margin-top: 8rem;
+}
+
+.settings-section-status {
+  order: 3;
+}
+
+.settings-section-robot-body {
+  order: 4;
+}
+
+.local-brain-card {
+  order: 5;
+}
+
+.settings-section-idle-scenarios {
+  order: 6;
+}
+
+.camera-card {
+  order: 7;
+}
+
+.settings-section-movement {
+  order: 8;
+}
+
+.settings-section-life {
+  order: 9;
+}
+
+.settings-section-agent-message {
+  order: 10;
+}
+
+.settings-section-scenarios {
+  order: 11;
+}
+
+.personality-card {
+  order: 12;
+}
+
+.log-card {
+  order: 13;
+}
+
+.camera-card {
+  border-color: rgba(126, 224, 186, 0.2);
+}
+
+.personality-card {
+  border-color: rgba(255, 191, 92, 0.18);
+}
+
+.local-brain-card {
+  border-color: rgba(144, 231, 255, 0.2);
+}
+
+.settings-section-idle-scenarios {
+  border-color: rgba(126, 224, 186, 0.24);
+}
+
+.local-motion-armed .local-brain-card {
+  border-color: rgba(255, 209, 102, 0.58);
+  box-shadow:
+    var(--shadow),
+    0 0 38px rgba(255, 209, 102, 0.1);
+}
+
+.title-card h1,
+.panel-card h2 {
+  margin: 0;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--glow-strong);
+}
+
+.subtitle {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+.panel-note {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.safety-note {
+  margin: 0.65rem 0 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.95rem;
+  background: var(--warn-bg);
+  border: 1px solid rgba(255, 191, 92, 0.18);
+  color: #f4d598;
+}
+
+.local-brain-card h3 {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+}
+
+.camera-warning,
+.privacy-note {
+  margin: 0.65rem 0 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.9rem;
+  line-height: 1.4;
+}
+
+.camera-warning {
+  background: rgba(255, 191, 92, 0.08);
+  border: 1px solid rgba(255, 191, 92, 0.16);
+  color: #f4d598;
+}
+
+.privacy-note {
+  background: rgba(126, 224, 186, 0.08);
+  border: 1px solid rgba(126, 224, 186, 0.18);
+  color: #c8f5e4;
+}
+
+.brain-policy-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.local-motion-arm-field {
+  border-color: rgba(255, 209, 102, 0.3);
+  background:
+    linear-gradient(180deg, rgba(255, 209, 102, 0.08), rgba(92, 54, 12, 0.1)),
+    rgba(6, 10, 17, 0.62);
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.9rem;
+  background: rgba(6, 10, 17, 0.52);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.checkbox-field input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--glow);
+}
+
+.local-brain-state--running,
+.local-server-state--available {
+  color: var(--success);
+}
+
+.local-brain-state--stopped,
+.local-server-state--unavailable {
+  color: var(--danger);
+}
+
+.camera-state--active {
+  color: var(--success);
+}
+
+.camera-state--warn {
+  color: var(--warning);
+}
+
+.status-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.status-grid--wide .status-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.status-row span {
+  color: var(--muted);
+}
+
+.status-row strong {
+  overflow-wrap: anywhere;
+}
+
+.input-row,
+.input-stack {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.input-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+#userInput,
+.personality-card input[type="text"],
+.personality-card textarea,
+.personality-card select,
+button {
+  border-radius: 0.95rem;
+  border: 1px solid rgba(122, 193, 255, 0.2);
+  background: rgba(8, 13, 23, 0.9);
+  color: var(--text);
+  font: inherit;
+}
+
+#userInput,
+.personality-card input[type="text"],
+.personality-card textarea,
+.personality-card select {
+  min-height: 3.25rem;
+  padding: 0 1rem;
+  outline: none;
+}
+
+.personality-card textarea {
+  min-height: 5rem;
+  padding: 0.85rem 1rem;
+  resize: vertical;
+}
+
+#userInput:focus,
+.personality-card input[type="text"]:focus,
+.personality-card textarea:focus,
+.personality-card select:focus {
+  border-color: rgba(144, 231, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(97, 211, 255, 0.12);
+}
+
+.button-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.button-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.button-grid--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.slider-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.85rem;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.idle-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.idle-number-field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.idle-number-field span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.idle-number-field input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.7rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(122, 193, 255, 0.2);
+  background: rgba(8, 13, 23, 0.9);
+  color: var(--text);
+  font: inherit;
+}
+
+.idle-number-field input:focus {
+  outline: none;
+  border-color: rgba(144, 231, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(97, 211, 255, 0.12);
+}
+
+.settings-section-idle-scenarios h3 {
+  margin: 1rem 0 0;
+  font-size: 1rem;
+}
+
+.personality-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.slider-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.slider-field span {
+  color: var(--muted);
+}
+
+.slider-field strong {
+  color: var(--text);
+}
+
+.slider-field input[type="range"] {
+  min-width: 0;
+  width: 100%;
+  accent-color: var(--glow);
+}
+
+.slider-field input,
+.slider-field select,
+.button-grid input,
+.button-grid button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.camera-preview-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.6fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+#cameraPreview,
+#snapshotPreview {
+  width: 100%;
+  min-height: 150px;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 1rem;
+  border: 1px solid rgba(122, 193, 255, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(126, 224, 186, 0.12), transparent 40%),
+    rgba(6, 10, 17, 0.72);
+}
+
+#snapshotPreview[hidden] {
+  display: none;
+}
+
+.vision-preview-shell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.vision-preview-shell video {
+  display: block;
+  position: relative;
+  z-index: 1;
+}
+
+.object-detection-overlay {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: 1rem;
+}
+
+.vision-preview-shell--compact .object-detection-overlay {
+  border-radius: 0.85rem;
+}
+
+.object-vision-panel {
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 0.95rem;
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(122, 193, 255, 0.16);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(circle at top left, rgba(126, 224, 186, 0.08), transparent 42%),
+    rgba(6, 10, 17, 0.66);
+}
+
+.object-vision-panel__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.object-vision-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.object-vision-panel p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.button-grid--compact {
+  grid-template-columns: 1fr;
+  min-width: min(9rem, 100%);
+}
+
+.debug-grid {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.debug-grid span {
+  color: var(--muted);
+}
+
+.detected-object-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  margin-top: 0.35rem;
+  padding: 0.65rem;
+  border-radius: 0.95rem;
+  background: rgba(6, 10, 17, 0.82);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.detected-object-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.42rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(126, 224, 186, 0.1);
+  border: 1px solid rgba(126, 224, 186, 0.2);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.debug-grid pre {
+  min-height: 4.5rem;
+  max-height: 180px;
+  overflow: auto;
+  margin: 0.35rem 0 0;
+  padding: 0.85rem;
+  border-radius: 0.95rem;
+  background: rgba(6, 10, 17, 0.82);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.personality-export-output {
+  margin: 0.85rem 0 0;
+  padding: 0.85rem;
+  border-radius: 0.95rem;
+  background: rgba(6, 10, 17, 0.82);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.personality-export-output {
+  max-height: 220px;
+}
+
+.movement-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.movement-grid .danger-button {
+  grid-column: 1 / -1;
+}
+
+button {
+  min-height: 3.25rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(144, 231, 255, 0.48);
+  background: rgba(11, 18, 30, 1);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.primary-button {
+  background:
+    linear-gradient(180deg, rgba(59, 171, 255, 0.24), rgba(17, 70, 122, 0.24)),
+    rgba(11, 18, 30, 1);
+}
+
+.danger-button {
+  border-color: rgba(255, 107, 107, 0.42);
+  background:
+    linear-gradient(180deg, rgba(255, 107, 107, 0.26), rgba(120, 20, 20, 0.18)),
+    var(--danger-bg);
+  color: #fff1f1;
+}
+
+.danger-button:hover {
+  border-color: rgba(255, 107, 107, 0.75);
+  background:
+    linear-gradient(180deg, rgba(255, 107, 107, 0.36), rgba(120, 20, 20, 0.24)),
+    rgba(120, 20, 20, 0.48);
+}
+
+.warning-button {
+  border-color: rgba(255, 209, 102, 0.42);
+  background:
+    linear-gradient(180deg, rgba(255, 209, 102, 0.18), rgba(127, 83, 20, 0.16)),
+    rgba(20, 15, 8, 0.7);
+  color: #fff4d2;
+}
+
+.warning-button:hover {
+  border-color: rgba(255, 209, 102, 0.72);
+}
+
+.local-motion-armed #localMotionArmedToggle {
+  outline: 2px solid rgba(255, 209, 102, 0.75);
+}
+
+.local-motion-armed .local-motion-arm-field {
+  border-color: rgba(255, 107, 107, 0.65);
+  background:
+    linear-gradient(180deg, rgba(255, 209, 102, 0.22), rgba(255, 107, 107, 0.22)),
+    rgba(48, 22, 10, 0.86);
+}
+
+.movement-button {
+  min-height: 4rem;
+  font-size: 1rem;
+}
+
+.scenario-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.local-brain-list,
+.local-event-list {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.6rem;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.local-brain-item,
+.local-event-item {
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: rgba(6, 10, 17, 0.72);
+  border: 1px solid var(--line);
+}
+
+.local-brain-item--skipped {
+  opacity: 0.75;
+}
+
+.local-event-item--p5 {
+  border-color: rgba(255, 107, 107, 0.42);
+}
+
+.local-event-item--p2 {
+  border-color: rgba(97, 211, 255, 0.32);
+}
+
+.local-brain-item strong,
+.local-event-item strong {
+  display: block;
+  color: var(--glow-strong);
+}
+
+.local-brain-item span,
+.local-event-item span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.log-card {
+  min-height: 220px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.log-panel {
+  margin-top: 0.85rem;
+  min-height: 160px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 0.85rem;
+  border-radius: 1rem;
+  background: rgba(6, 10, 17, 0.9);
+  border: 1px solid var(--line);
+  font-family: "IBM Plex Mono", "SFMono-Regular", monospace;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.log-entry + .log-entry {
+  margin-top: 0.45rem;
+}
+
+.log-entry--warn .log-text {
+  color: #f4d598;
+}
+
+.log-entry--error .log-text {
+  color: #ff9d9d;
+}
+
+.log-time {
+  color: var(--glow-strong);
+}
+
+.log-text {
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .face-frame {
+    width: min(100%, 520px);
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 0.85rem;
+  }
+
+  .face-frame {
+    width: 100%;
+    border-radius: 1.5rem;
+  }
+
+  .input-row,
+  .button-grid,
+  .movement-grid,
+  .camera-preview-grid,
+  .idle-settings-grid,
+  .personality-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .button-grid--triple {
+    grid-template-columns: 1fr;
+  }
+
+  .object-vision-panel__header {
+    grid-template-columns: 1fr;
+  }
+
+  .button-grid--compact {
+    width: 100%;
+  }
+}
+
+/* Production robot-face mode */
+body {
+  overflow: hidden;
+}
+
+.app-shell {
+  position: fixed;
+  inset: 0;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.face-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(97, 211, 255, 0.16), transparent 34%),
+    radial-gradient(circle at 50% 120%, rgba(126, 224, 186, 0.08), transparent 44%),
+    linear-gradient(180deg, #050812 0%, #02040a 100%);
+}
+
+.face-frame {
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+}
+
+.control-panel {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 120;
+  width: clamp(430px, 50vw, 920px);
+  max-width: 94vw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  display: grid;
+  grid-auto-rows: min-content;
+  gap: 1rem;
+  align-content: start;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  background: rgba(5, 8, 16, 0.94);
+  border-left: 1px solid rgba(122, 193, 255, 0.18);
+  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(22px);
+  transform: translateX(104%);
+  transition: transform 180ms ease;
+}
+
+.settings-open .control-panel {
+  transform: translateX(0);
+}
+
+.settings-drawer-header {
+  position: sticky;
+  top: calc(-1 * max(1rem, env(safe-area-inset-top)));
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: calc(-1 * max(1rem, env(safe-area-inset-top))) -1rem 0;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
+  background: rgba(5, 8, 16, 0.96);
+  border-bottom: 1px solid rgba(122, 193, 255, 0.12);
+}
+
+.settings-drawer-header h2,
+.settings-drawer-header p {
+  margin: 0;
+}
+
+.settings-drawer-header button {
+  min-height: 2.65rem;
+}
+
+.settings-quick-actions {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  border-color: rgba(126, 224, 186, 0.26);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(126, 224, 186, 0.16), transparent 34%),
+    rgba(9, 16, 24, 0.86);
+}
+
+.settings-quick-actions h2,
+.settings-quick-actions p {
+  margin: 0;
+}
+
+.settings-quick-actions .button-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-quick-actions button {
+  width: 100%;
+  min-height: 3rem;
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.settings-backdrop:hover,
+.settings-backdrop:active {
+  transform: none;
+  border-color: transparent;
+  background: rgba(0, 0, 0, 0.36);
+}
+
+.settings-open .settings-backdrop {
+  display: block;
+}
+
+.settings-open .production-actions {
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.production-actions {
+  position: fixed;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  z-index: 100;
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.looi-activity-indicator {
+  --activity-dot: 5px;
+  display: grid;
+  justify-items: center;
+  gap: 0.26rem;
+  min-width: 3.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.94);
+  pointer-events: none;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.24);
+}
+
+.looi-activity-points {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 52px;
+  height: 24px;
+  background: transparent;
+}
+
+.looi-activity-points span {
+  display: block;
+  width: var(--activity-dot);
+  height: var(--activity-dot);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 7px rgba(255, 255, 255, 0.62);
+  opacity: 0.92;
+  transition:
+    width 140ms ease,
+    height 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.looi-activity-label {
+  min-height: 0.68rem;
+  color: rgba(255, 255, 255, 0.86);
+  font: 800 0.58rem/1 "IBM Plex Sans", "Segoe UI", sans-serif;
+  letter-spacing: 0.015em;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease;
+}
+
+.looi-activity-indicator[data-state="idle"] .looi-activity-label,
+.looi-activity-indicator[data-state="listening"] .looi-activity-label,
+.looi-activity-indicator[data-state="hearing"] .looi-activity-label,
+.looi-activity-indicator[data-state="starting"] .looi-activity-label {
+  opacity: 1;
+}
+
+.looi-activity-indicator[data-state="listening"] .looi-activity-points span {
+  opacity: 0.95;
+}
+
+.looi-activity-indicator[data-state="hearing"] .looi-activity-points {
+  gap: 4px;
+}
+
+.looi-activity-indicator[data-state="hearing"] .looi-activity-points span {
+  width: 4px;
+  height: 17px;
+  border-radius: 999px;
+  animation: looiActivityWave 760ms ease-in-out infinite;
+}
+
+.looi-activity-indicator[data-state="hearing"] .looi-activity-points span:nth-child(1),
+.looi-activity-indicator[data-state="hearing"] .looi-activity-points span:nth-child(5) {
+  animation-duration: 560ms;
+}
+
+.looi-activity-points span:nth-child(2) {
+  animation-delay: 80ms;
+}
+
+.looi-activity-points span:nth-child(3) {
+  animation-delay: 160ms;
+}
+
+.looi-activity-points span:nth-child(4) {
+  animation-delay: 240ms;
+}
+
+.looi-activity-points span:nth-child(5) {
+  animation-delay: 320ms;
+}
+
+.looi-activity-indicator[data-state="thinking"] .looi-activity-points,
+.looi-activity-indicator[data-state="starting"] .looi-activity-points {
+  width: 52px;
+  height: 32px;
+}
+
+.looi-activity-indicator[data-state="thinking"] .looi-activity-points span,
+.looi-activity-indicator[data-state="starting"] .looi-activity-points span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  transition: none;
+}
+
+@keyframes looiActivityWave {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scaleY(0.36);
+  }
+
+  48% {
+    opacity: 1;
+    transform: scaleY(1.18);
+  }
+}
+
+.production-actions button {
+  min-height: 2.85rem;
+  border-radius: 1rem;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+.production-stop-button {
+  border-color: rgba(255, 107, 107, 0.72);
+  background: rgba(120, 20, 20, 0.84);
+  color: #fff4f4;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.local-brain-quick-button {
+  border-color: rgba(126, 224, 186, 0.42);
+  background:
+    linear-gradient(180deg, rgba(126, 224, 186, 0.2), rgba(20, 90, 62, 0.18)),
+    rgba(7, 16, 18, 0.82);
+  color: #d8fff0;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.local-brain-quick-button--live {
+  border-color: rgba(126, 224, 186, 0.86);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.28),
+    0 0 24px rgba(126, 224, 186, 0.22);
+}
+
+.settings-toggle-button {
+  width: 2.85rem;
+  padding: 0;
+  border-color: rgba(122, 193, 255, 0.35);
+  background: rgba(8, 13, 23, 0.82);
+  color: var(--glow-strong);
+  font-size: 1.12rem;
+}
+
+.runtime-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow-y: auto;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at 50% 42%, rgba(97, 211, 255, 0.14), transparent 32%),
+    rgba(3, 5, 10, 0.94);
+  backdrop-filter: blur(18px);
+  transition:
+    opacity 180ms ease,
+    visibility 180ms ease;
+}
+
+.runtime-gate--hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.runtime-gate__card {
+  width: min(440px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  border-radius: 1.6rem;
+  border: 1px solid rgba(122, 193, 255, 0.22);
+  background:
+    radial-gradient(circle at top, rgba(97, 211, 255, 0.09), transparent 52%),
+    rgba(8, 13, 23, 0.94);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.56);
+  text-align: center;
+}
+
+.runtime-gate__card h1 {
+  margin: 0;
+  font-size: clamp(1.85rem, 8vw, 3.4rem);
+}
+
+.runtime-gate__card p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.runtime-gate__actions {
+  display: grid;
+  grid-template-areas:
+    "firmware"
+    "bluetooth"
+    "start"
+    "download";
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+}
+
+.runtime-gate__actions > esp-web-install-button {
+  grid-area: firmware;
+}
+
+.runtime-gate__actions > .bluetooth-connect-row {
+  grid-area: bluetooth;
+}
+
+.runtime-gate__actions > #productionStartButton {
+  grid-area: start;
+}
+
+.runtime-gate__actions > #downloadAppButton {
+  grid-area: download;
+}
+
+.runtime-gate__card button,
+.runtime-gate__card esp-web-install-button {
+  width: 100%;
+}
+
+esp-web-install-button {
+  display: block;
+}
+
+esp-web-install-button button {
+  width: 100%;
+}
+
+.download-app-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.download-app-button__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  border-radius: 0.35rem;
+  object-fit: contain;
+}
+
+.bluetooth-connect-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.bluetooth-connect-button {
+  min-width: 0;
+}
+
+.bluetooth-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 6.8rem;
+  min-height: 2.9rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(122, 193, 255, 0.18);
+  border-radius: 0.8rem;
+  background: rgba(6, 10, 17, 0.72);
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.bluetooth-status__dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: rgba(143, 168, 196, 0.72);
+  box-shadow: 0 0 0 3px rgba(143, 168, 196, 0.1);
+}
+
+.bluetooth-status[data-state="connecting"] .bluetooth-status__dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.14);
+}
+
+.bluetooth-status[data-state="connected"] {
+  border-color: rgba(126, 224, 186, 0.46);
+  color: #c9ffe9;
+}
+
+.bluetooth-status[data-state="connected"] .bluetooth-status__dot {
+  background: var(--success);
+  box-shadow:
+    0 0 0 3px rgba(126, 224, 186, 0.14),
+    0 0 12px rgba(126, 224, 186, 0.7);
+}
+
+.bluetooth-status[data-state="error"] {
+  border-color: rgba(255, 128, 128, 0.5);
+  color: #ffd1d1;
+}
+
+.bluetooth-status[data-state="error"] .bluetooth-status__dot {
+  background: #ff8080;
+  box-shadow: 0 0 0 3px rgba(255, 128, 128, 0.14);
+}
+
+.bluetooth-status[data-state="unsupported"] {
+  border-color: rgba(255, 209, 102, 0.48);
+  color: #fff0bf;
+}
+
+.bluetooth-status[data-state="unsupported"] .bluetooth-status__dot {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.14);
+}
+
+.bluetooth-status-detail {
+  grid-column: 1 / -1;
+  margin: -0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 460px) {
+  .bluetooth-connect-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bluetooth-status {
+    width: 100%;
+  }
+}
+
+@media (orientation: landscape) and (max-width: 920px) and (max-height: 560px) {
+  .runtime-gate {
+    place-items: start center;
+    padding-block: max(0.55rem, env(safe-area-inset-top)) max(0.55rem, env(safe-area-inset-bottom));
+  }
+
+  .runtime-gate__card {
+    width: min(720px, 100%);
+    padding: clamp(0.85rem, 2.4vw, 1.25rem);
+    border-radius: 1rem;
+  }
+
+  .runtime-gate__card .eyebrow {
+    margin-bottom: 0.25rem;
+  }
+
+  .runtime-gate__card h1 {
+    font-size: clamp(1.55rem, 4.8vh, 2.2rem);
+  }
+
+  .runtime-gate__card p:not(.eyebrow) {
+    margin-block: 0.35rem 0;
+    line-height: 1.35;
+  }
+
+  .runtime-gate__actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "firmware firmware"
+      "bluetooth bluetooth"
+      "start start"
+      "download download";
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+  }
+
+  .runtime-gate__actions > esp-web-install-button,
+  .runtime-gate__actions > .bluetooth-connect-row,
+  .runtime-gate__actions > button {
+    min-width: 0;
+  }
+
+  .runtime-gate__actions button,
+  .runtime-gate__actions .bluetooth-status {
+    min-height: 2.55rem;
+    padding-block: 0.58rem;
+  }
+
+  .bluetooth-connect-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.45rem;
+  }
+
+  .bluetooth-status {
+    min-width: 5.9rem;
+    padding-inline: 0.6rem;
+  }
+}
+
+.looi-vision-widget {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 36;
+  width: min(var(--local-vision-widget-width), 38vw);
+  padding: 0.38rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(122, 193, 255, 0.2);
+  background: rgba(5, 8, 16, 0.78);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(14px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.looi-vision-widget__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.28rem;
+  font-size: 0.58rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.looi-vision-widget__header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.looi-vision-widget__header strong {
+  color: var(--glow-strong);
+  text-align: right;
+}
+
+.looi-vision-widget[data-collapsed="true"] {
+  width: max-content;
+  min-width: 9rem;
+  max-width: calc(100vw - 2rem);
+}
+
+.looi-vision-widget[data-collapsed="true"] .looi-vision-widget__header {
+  margin-bottom: 0;
+}
+
+.looi-vision-widget[data-collapsed="true"] .looi-vision-widget__body {
+  display: none;
+}
+
+#localVisionPreview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(122, 193, 255, 0.16);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(126, 224, 186, 0.16), transparent 36%),
+    rgba(3, 5, 10, 0.92);
+}
+
+#localVisionDetail {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .control-panel {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    padding: max(0.85rem, env(safe-area-inset-top)) 0.85rem max(2rem, env(safe-area-inset-bottom));
+    border-left: 0;
+  }
+
+  .settings-drawer-header {
+    margin: calc(-1 * max(0.85rem, env(safe-area-inset-top))) -0.85rem 0;
+    padding: max(0.85rem, env(safe-area-inset-top)) 0.85rem 0.85rem;
+  }
+
+  .settings-nav {
+    position: static;
+    top: auto;
+    z-index: 1;
+    margin-inline: -0.1rem;
+    box-shadow: none;
+  }
+
+  .control-panel > [id] {
+    scroll-margin-top: 1rem;
+  }
+
+  .status-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .status-row strong {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .production-actions {
+    left: max(0.75rem, env(safe-area-inset-left));
+    right: max(0.75rem, env(safe-area-inset-right));
+    justify-content: flex-end;
+  }
+
+  .production-actions button {
+    min-height: 2.65rem;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.88rem;
+  }
+
+  .looi-vision-widget {
+    width: min(var(--local-vision-widget-width), 34vw);
+  }
+
+  .looi-vision-widget[data-collapsed="true"] {
+    width: max-content;
+  }
+
+  .vision-collapse-button {
+    min-height: 2.2rem;
+    padding-inline: 0.5rem;
+    font-size: 0.7rem;
+  }
+}

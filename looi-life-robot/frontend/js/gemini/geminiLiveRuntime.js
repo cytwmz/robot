@@ -1,0 +1,2821 @@
+import { clampNumber, safeStringify } from "../core/runtimeUtils.js";
+import { apiUrl, getBackendBaseUrl } from "../core/apiBase.js";
+import {
+  GEMINI_LIVE_INPUT_RATE,
+  GEMINI_LIVE_OUTPUT_RATE,
+  QWEN_OMNI_REALTIME_INPUT_RATE,
+  QWEN_OMNI_REALTIME_OUTPUT_RATE,
+  buildGeminiLiveSetup,
+  buildQwenOmniRealtimeSetup,
+  geminiFunctionCallToAction,
+  summarizeGeminiAction
+} from "./geminiLiveTools.js";
+
+// Larger chunks reduce main-thread encoding work while keeping voice latency low.
+const INPUT_BUFFER_SIZE = 4096;
+const INPUT_ACTIVE_LEVEL = 0.018;
+const INPUT_ACTIVE_HOLD_MS = 260;
+const QUIET_INPUT_COOLDOWN_MS = 450;
+const MAX_AUDIO_TRANSPORT_BUFFERED_BYTES = 64 * 1024;
+const MAX_VISION_TRANSPORT_BUFFERED_BYTES = 24 * 1024;
+const STATUS_EMIT_INTERVAL_MS = 100;
+const MAX_RECONNECT_ATTEMPTS = 6;
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 12_000;
+const IMMEDIATE_STATUS_KEYS = new Set([
+  "running",
+  "connecting",
+  "connected",
+  "micStreaming",
+  "audioPlaying",
+  "thinking",
+  "setupComplete",
+  "reconnecting",
+  "inputActive",
+  "generationActive",
+  "turnActive",
+  "lastError",
+  "lastInputTranscript",
+  "lastOutputTranscript",
+  "lastToolCall",
+  "lastToolResult"
+]);
+
+export class GeminiLiveRuntime {
+  constructor({
+    toolExecutor,
+    face,
+    lifeEngine,
+    logger,
+    eventBus,
+    getRuntimeContext,
+    fetchToken,
+    transportFactory,
+    mediaDevices,
+    audioContextFactory,
+    now
+  } = {}) {
+    this.toolExecutor = toolExecutor;
+    this.face = face;
+    this.lifeEngine = lifeEngine;
+    this.logger = logger;
+    this.eventBus = eventBus;
+    this.getRuntimeContext = getRuntimeContext;
+    this.fetchToken = fetchToken ?? defaultFetchToken;
+    this.transportFactory = transportFactory ?? createGeminiRelayTransport;
+    this.provider = "gemini";
+    this.mediaDevices = mediaDevices ?? globalThis.navigator?.mediaDevices ?? null;
+    this.audioContextFactory = audioContextFactory ?? createBrowserAudioContext;
+    this.now = now ?? (() => Date.now());
+    this.statusCallbacks = new Set();
+    this.transport = null;
+    this.transportConnectionId = 0;
+    this.micStream = null;
+    this.inputAudioContext = null;
+    this.outputAudioContext = null;
+    this.inputSource = null;
+    this.processor = null;
+    this.micOutputGain = null;
+    this.micStartPromise = null;
+    this.micGeneration = 0;
+    this.activeOutputSources = new Set();
+    this.nextOutputTime = 0;
+    this.audioStatusTimer = 0;
+    this.lastAudioPlaybackEndedAt = 0;
+    this.pendingToolCalls = new Map();
+    this.inputCoordinator = new GeminiInputCoordinator({
+      runtime: this,
+      now: this.now
+    });
+    this.lastVisionContextSignature = "";
+    this.lastVisionContextSentAt = 0;
+    this.lastSpeechStartScenarioSignature = "";
+    this.lastSpeechStartScenarioName = "";
+    this.lastSpeechStartScenarioAt = 0;
+    this.lastAcceptedRunScenarioName = "";
+    this.lastAcceptedRunScenarioAt = 0;
+    this.deferredSpeechStartScenario = null;
+    this.speechStartFinishTimer = 0;
+    this.runToken = 0;
+    this.reconnectTimer = 0;
+    this.reconnectAttempt = 0;
+    this.shouldReconnect = false;
+    this.captureAudioOnReconnect = false;
+    this.lastStartOptions = {
+      model: "",
+      voice: "",
+      thinkingLevel: "",
+      captureAudio: true
+    };
+    this.statusEmitTimer = 0;
+    this.lastStatusEmitAt = 0;
+    this.audioDebug = {
+      sentInputFrames: 0,
+      sentInputBytes: 0,
+      receivedMessages: 0,
+      receivedAudioChunks: 0,
+      receivedAudioBytes: 0,
+      queuedOutputChunks: 0,
+      lastInputLogAt: 0,
+      lastInputStatusAt: 0,
+      lastVoiceAt: 0,
+      lastOutputLogAt: 0,
+      lastOutputEndLogAt: 0
+    };
+    this.status = {
+      enabled: false,
+      configured: false,
+      running: false,
+      connecting: false,
+      connected: false,
+      micStreaming: false,
+      audioPlaying: false,
+      thinking: false,
+      lastInputTranscript: "",
+      lastInputTranscriptAt: 0,
+      lastUserCommandAt: 0,
+      lastOutputTranscript: "",
+      lastToolCall: "",
+      lastToolResult: "",
+      latencyMs: null,
+      lastError: "",
+      outputAudioState: "",
+      lastAudioDebug: "",
+      lastServerMessageDebug: "",
+      lastVideoFrameAt: 0,
+      sentVideoFrames: 0,
+      lastVideoFrameDebug: "",
+      model: "",
+      voice: "",
+      thinkingLevel: "",
+      setupComplete: false,
+      startedAt: 0,
+      lastAudioAt: 0,
+      lastToolCallAt: 0,
+      inputLevel: 0,
+      inputActive: false,
+      lastInputAudioAt: 0,
+      lastVoiceAt: 0,
+      generationActive: false,
+      turnActive: false,
+      lastGenerationCompleteAt: 0,
+      lastTurnCompleteAt: 0,
+      lastInterruptedAt: 0,
+      lastInputKind: "",
+      lastInputGateReason: "",
+      lastSessionHandle: "",
+      lastSessionUpdateAt: 0,
+      goAwayAt: 0,
+      goAwayTimeLeftMs: null,
+      reconnecting: false,
+      reconnectAttempt: 0,
+      droppedInputFrames: 0,
+      micMuted: false
+    };
+  }
+
+  configure(config = {}) {
+    const qwenEnabled = config.qwenOmniRealtimeEnabled === true;
+    this.provider = qwenEnabled ? "qwen" : "gemini";
+    this.status.enabled = Boolean(qwenEnabled ? config.qwenOmniRealtimeEnabled : config.geminiLiveEnabled);
+    this.status.configured = Boolean(qwenEnabled ? config.qwenOmniRealtimeConfigured : config.geminiLiveConfigured);
+    this.status.model = (qwenEnabled ? config.qwenOmniRealtimeModel : config.geminiLiveModel) || this.status.model;
+    this.status.voice = (qwenEnabled ? config.qwenOmniRealtimeVoice : config.geminiLiveVoice) || this.status.voice || (qwenEnabled ? "Ethan" : "Kore");
+    this.status.thinkingLevel = config.geminiLiveThinkingLevel || this.status.thinkingLevel || "minimal";
+    this.status.contextCompression = config.geminiLiveContextCompression !== false;
+    this.status.sessionResumption = config.geminiLiveSessionResumption !== false;
+    this.status.slidingWindowTokens = normalizePositiveInteger(config.geminiLiveSlidingWindowTokens, 32_768);
+    this.emitStatus({ immediate: true });
+  }
+
+  onStatus(callback) {
+    if (typeof callback !== "function") {
+      return () => {};
+    }
+
+    this.statusCallbacks.add(callback);
+    callback(this.getStatus());
+    return () => this.statusCallbacks.delete(callback);
+  }
+
+  getStatus() {
+    const pendingToolCallCount = this.pendingToolCalls?.size ?? 0;
+    const pendingQuietInputCount = this.inputCoordinator?.pendingQuietInputs?.size ?? 0;
+    return {
+      ...this.status,
+      pendingQuietInputCount,
+      pendingToolCallCount,
+      toolCallActive: pendingToolCallCount > 0 || Boolean(this.deferredSpeechStartScenario)
+    };
+  }
+
+  isRunning() {
+    return Boolean(this.status.running || this.status.connecting || this.status.connected);
+  }
+
+  async start({
+    model,
+    voice,
+    thinkingLevel,
+    captureAudio = true
+  } = {}) {
+    if (this.status.running || this.status.connecting) {
+      return this.getStatus();
+    }
+
+    if (this.status.enabled === false) {
+      throw new Error("Agent is disabled in server config.");
+    }
+
+    const runToken = ++this.runToken;
+    this.clearReconnectTimer();
+    this.shouldReconnect = true;
+    this.reconnectAttempt = 0;
+    this.captureAudioOnReconnect = Boolean(captureAudio);
+    this.lastStartOptions = {
+      model: model || this.status.model,
+      voice: voice || this.status.voice || "Kore",
+      thinkingLevel: thinkingLevel || this.status.thinkingLevel || "minimal"
+    };
+    return this.connectSession(runToken, {
+      ...this.lastStartOptions,
+      captureAudio: this.captureAudioOnReconnect
+    });
+  }
+
+  async connectSession(runToken, {
+    model,
+    voice,
+    thinkingLevel,
+    captureAudio = this.captureAudioOnReconnect
+  } = {}, {
+    reconnecting = false
+  } = {}) {
+    this.patchStatus({
+      running: Boolean(reconnecting),
+      connecting: true,
+      connected: false,
+      setupComplete: false,
+      thinking: false,
+      lastError: "",
+      latencyMs: null,
+      startedAt: reconnecting ? this.status.startedAt || this.now() : this.now(),
+      model: model || this.status.model,
+      voice: voice || this.status.voice || "Kore",
+      thinkingLevel: thinkingLevel || this.status.thinkingLevel || "minimal",
+      reconnecting,
+      reconnectAttempt: reconnecting ? this.reconnectAttempt : 0
+    });
+    await this.primeOutputAudio();
+    this.log(reconnecting ? `AGENT reconnect attempt ${this.reconnectAttempt}` : "AGENT STEP 1 session request");
+
+    try {
+      const sessionPayload = await this.fetchToken({ provider: this.provider });
+      if (runToken !== this.runToken) {
+        return this.getStatus();
+      }
+
+      const websocketUrl = validateAgentRelayUrl(sessionPayload.websocketUrl, this.provider);
+
+      this.patchStatus({
+        model: sessionPayload.model || model || this.status.model,
+        voice: sessionPayload.voice || voice || this.status.voice || "Kore",
+        thinkingLevel:
+          sessionPayload.thinkingLevel || thinkingLevel || this.status.thinkingLevel || "minimal"
+      });
+      await this.openTransport(websocketUrl, runToken, { reconnecting });
+
+      if (runToken !== this.runToken) {
+        return this.getStatus();
+      }
+
+      const setupSent = this.sendJson(this.provider === "qwen"
+        ? buildQwenOmniRealtimeSetup({ voice: this.status.voice })
+        : buildGeminiLiveSetup({
+            model: this.status.model,
+            voice: this.status.voice,
+            thinkingLevel: this.status.thinkingLevel,
+            contextCompression: this.status.contextCompression,
+            sessionResumption: this.status.sessionResumption,
+            slidingWindowTokens: this.status.slidingWindowTokens
+          }));
+      if (!setupSent) {
+        throw new Error("Agent relay closed before setup could be sent.");
+      }
+      this.log("AGENT STEP 3 setup sent");
+
+      if (captureAudio) {
+        await this.startMic(runToken);
+      }
+
+      this.patchStatus({
+        running: true,
+        connecting: false,
+        connected: true,
+        reconnecting: false,
+        reconnectAttempt: 0
+      });
+      this.lifeEngine?.setListening?.(Boolean(captureAudio));
+      this.reconnectAttempt = 0;
+      return this.getStatus();
+    } catch (error) {
+      const canRetry = reconnecting && this.shouldReconnect && runToken === this.runToken;
+      this.patchStatus({
+        running: canRetry,
+        connecting: false,
+        connected: false,
+        micStreaming: false,
+        thinking: false,
+        reconnecting: canRetry,
+        lastError: error.message
+      });
+      this.cleanupTransport();
+      this.stopMic();
+      this.log(`Agent start failed: ${error.message}`, "warn");
+      if (canRetry) {
+        this.scheduleReconnect(`connect_failed:${error.message}`, runToken);
+        return this.getStatus();
+      }
+      this.shouldReconnect = false;
+      throw error;
+    }
+  }
+
+  async stop(reason = "gemini_live_stop") {
+    this.runToken += 1;
+    this.shouldReconnect = false;
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    this.interruptAudio(reason);
+    await this.stopMic({ notifyGemini: true, reason });
+    this.cleanupTransport();
+    this.pendingToolCalls.clear();
+    this.inputCoordinator?.reset?.(reason);
+    this.lifeEngine?.setListening?.(false);
+    this.patchStatus({
+      running: false,
+      connecting: false,
+      connected: false,
+      micStreaming: false,
+      audioPlaying: false,
+      thinking: false,
+      setupComplete: false,
+      generationActive: false,
+      turnActive: false,
+      reconnecting: false,
+      reconnectAttempt: 0
+    });
+    this.log(`Agent stopped: ${reason}`);
+    return this.getStatus();
+  }
+
+  interrupt(reason = "gemini_live_interrupt") {
+    this.interruptAudio(reason);
+    this.pendingToolCalls.clear();
+    this.inputCoordinator?.clearPendingQuiet?.(reason);
+    this.patchStatus({
+      audioPlaying: false,
+      thinking: false,
+      generationActive: false,
+      turnActive: false,
+      lastInterruptedAt: this.now(),
+      lastToolResult: `interrupted:${reason}`
+    });
+  }
+
+  async sendUserText(text, metadata = {}) {
+    return this.inputCoordinator.sendUserText(text, metadata);
+  }
+
+  async sendQuietContext(kind, payload, metadata = {}) {
+    return this.inputCoordinator.sendQuietContext(kind, payload, metadata);
+  }
+
+  getQuietInputGate(kind = "quiet_context") {
+    return this.inputCoordinator.getQuietInputGate(kind);
+  }
+
+  async sendVisionContext({ force = false, reason = "" } = {}) {
+    if (!this.status.connected || typeof this.getRuntimeContext !== "function") {
+      return false;
+    }
+
+    const context = this.getRuntimeContext() ?? {};
+    const payload = compactVisionContext(context.vision, {
+      recentObjectReference: context.recentObjectReference,
+      reason
+    });
+    const text = safeStringify(payload);
+    const signature = safeStringify(stableVisionSignature(payload));
+
+    if (!force && signature === this.lastVisionContextSignature) {
+      this.log(`AGENT vision context skipped unchanged reason=${reason || "none"}`, "debug");
+      return false;
+    }
+
+    return this.sendQuietContext("vision_context", payload, {
+      wrapper: "vision_context",
+      reason,
+      force,
+      coalesce: true,
+      onSent: () => {
+        this.lastVisionContextSignature = signature;
+        this.lastVisionContextSentAt = this.now();
+        this.log(
+          `AGENT vision context sent reason=${reason || "none"} force=${Boolean(force)} bytes=${text.length}`,
+          "debug"
+        );
+      },
+      onQueued: () => {
+        this.log(
+          `AGENT vision context queued reason=${reason || "none"} force=${Boolean(force)} bytes=${text.length}`,
+          "debug"
+        );
+      }
+    });
+  }
+
+  async sendVisionFrame({
+    data,
+    mimeType = "image/jpeg",
+    width = null,
+    height = null,
+    reason = "gemini_vision"
+  } = {}) {
+    if (this.provider === "qwen") {
+      this.patchStatus({ lastInputKind: "vision_frame", lastInputGateReason: "provider_media_unsupported" });
+      return false;
+    }
+    return this.inputCoordinator.sendVisionFrame({
+      data,
+      mimeType,
+      width,
+      height,
+      reason
+    });
+  }
+
+  async openTransport(url, runToken, { reconnecting = false } = {}) {
+    const connectionId = ++this.transportConnectionId;
+    await new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = globalThis.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(new Error("Agent relay open timed out."));
+      }, 10_000);
+
+      const transport = this.transportFactory({
+        url,
+        onOpen: () => {
+          if (settled || runToken !== this.runToken || connectionId !== this.transportConnectionId) {
+            return;
+          }
+          settled = true;
+          globalThis.clearTimeout(timeout);
+          this.patchStatus({
+            connected: true,
+            connecting: false
+          });
+          resolve();
+        },
+        onMessage: (message) => {
+          if (runToken !== this.runToken || connectionId !== this.transportConnectionId) {
+            return;
+          }
+          this.handleTransportMessage(message).catch((error) => {
+            this.patchStatus({ lastError: error.message });
+            this.log(`Agent message parse failed: ${error.message}`, "warn");
+          });
+        },
+        onError: (error) => {
+          if (runToken !== this.runToken || connectionId !== this.transportConnectionId) {
+            return;
+          }
+          const message = error?.message || error?.error?.message || "Agent relay error.";
+          this.patchStatus({ lastError: message });
+          this.log(`Agent relay error: ${message}`, "warn");
+          if (!settled) {
+            settled = true;
+            globalThis.clearTimeout(timeout);
+            reject(new Error(message));
+          }
+        },
+        onClose: (event = {}) => {
+          if (runToken !== this.runToken || connectionId !== this.transportConnectionId) {
+            return;
+          }
+
+          const reason = String(event?.reason || "Agent relay closed.");
+          if (!settled) {
+            settled = true;
+            globalThis.clearTimeout(timeout);
+            this.transport = null;
+            reject(new Error(reason));
+            return;
+          }
+
+          this.handleUnexpectedTransportClose(reason, runToken, { reconnecting });
+        }
+      });
+      this.transport = transport;
+    });
+  }
+
+  handleUnexpectedTransportClose(reason = "Agent relay closed.", runToken = this.runToken) {
+    if (runToken !== this.runToken) {
+      return;
+    }
+
+    this.transport = null;
+    this.inputCoordinator?.clearPendingQuiet?.("transport_closed");
+    this.stopMic();
+    this.interruptAudio("transport_closed");
+    const canReconnect = this.shouldReconnect && runToken === this.runToken;
+    this.patchStatus({
+      connected: false,
+      running: canReconnect,
+      connecting: false,
+      micStreaming: false,
+      audioPlaying: false,
+      thinking: false,
+      generationActive: false,
+      turnActive: false,
+      reconnecting: canReconnect,
+      lastError: reason
+    });
+    this.lifeEngine?.setListening?.(false);
+
+    if (canReconnect) {
+      this.scheduleReconnect(`transport_closed:${reason}`, runToken);
+    }
+  }
+
+  async startMic(runToken) {
+    if (this.status.micStreaming && this.isMicTrackLive()) {
+      return this.getStatus();
+    }
+    if (this.micStartPromise) {
+      return this.micStartPromise;
+    }
+
+    const promise = this.startMicInternal(runToken);
+    this.micStartPromise = promise;
+    try {
+      return await promise;
+    } finally {
+      if (this.micStartPromise === promise) {
+        this.micStartPromise = null;
+      }
+    }
+  }
+
+  async startMicInternal(runToken) {
+    if (!this.mediaDevices?.getUserMedia) {
+      throw new Error("Browser microphone capture is unavailable.");
+    }
+
+    if (this.micStream || this.inputAudioContext || this.processor) {
+      await this.stopMic();
+    }
+    if (
+      runToken !== this.runToken ||
+      (!this.captureAudioOnReconnect && this.status.connected)
+    ) {
+      return;
+    }
+
+    const generation = ++this.micGeneration;
+
+    const stream = await this.mediaDevices.getUserMedia({ audio: true });
+
+    if (
+      runToken !== this.runToken ||
+      generation !== this.micGeneration ||
+      (!this.captureAudioOnReconnect && this.status.connected)
+    ) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    let AudioContextCtor;
+    try {
+      AudioContextCtor = this.audioContextFactory();
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error(`Web Audio initialization failed: ${error.message}`);
+    }
+    if (typeof AudioContextCtor !== "function") {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error("Web Audio is unavailable in this browser.");
+    }
+    let audioContext;
+    try {
+      audioContext = new AudioContextCtor();
+      await audioContext.resume?.();
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      await audioContext?.close?.().catch?.(() => {});
+      throw new Error(`Web Audio initialization failed: ${error.message}`);
+    }
+    if (runToken !== this.runToken || generation !== this.micGeneration) {
+      stream.getTracks().forEach((track) => track.stop());
+      await audioContext.close?.().catch?.(() => {});
+      return;
+    }
+    let source;
+    let processor;
+    try {
+      source = audioContext.createMediaStreamSource(stream);
+      processor = audioContext.createScriptProcessor(
+        INPUT_BUFFER_SIZE,
+        1,
+        1
+      );
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      await audioContext.close?.().catch?.(() => {});
+      throw new Error(`Microphone audio graph initialization failed: ${error.message}`);
+    }
+
+    const silentSink = audioContext.createGain?.();
+    if (silentSink) {
+      silentSink.gain.value = 0;
+    }
+
+    processor.onaudioprocess = (event) => {
+      if (
+        runToken !== this.runToken ||
+        generation !== this.micGeneration ||
+        !this.status.connected
+      ) {
+        return;
+      }
+
+      const input = event.inputBuffer.getChannelData(0);
+      const inputLevel = calculateRms(input);
+      const inputRate = this.provider === "qwen" ? QWEN_OMNI_REALTIME_INPUT_RATE : GEMINI_LIVE_INPUT_RATE;
+      const pcm = float32ToPcm16(downsampleFloat32(input, audioContext.sampleRate, inputRate));
+
+      if (!pcm.byteLength) {
+        return;
+      }
+
+      const audioDetails = {
+        bytes: pcm.byteLength,
+        inputRate: audioContext.sampleRate,
+        outputRate: inputRate,
+        samples: pcm.length,
+        inputLevel
+      };
+      if (this.isTransportCongested()) {
+        this.recordInputAudioSent({ ...audioDetails, dropped: true });
+        return;
+      }
+
+      const encodedAudio = arrayBufferToBase64(pcm.buffer);
+      const sent = this.sendJson(this.provider === "qwen"
+        ? { type: "input_audio_buffer.append", audio: encodedAudio }
+        : {
+            realtimeInput: {
+              audio: {
+                data: encodedAudio,
+                mimeType: `audio/pcm;rate=${GEMINI_LIVE_INPUT_RATE}`
+              }
+            }
+          }, { droppable: true });
+      this.recordInputAudioSent({ ...audioDetails, dropped: !sent });
+    };
+
+    source.connect(processor);
+    if (silentSink) {
+      processor.connect(silentSink);
+      silentSink.connect(audioContext.destination);
+    } else {
+      processor.connect(audioContext.destination);
+    }
+
+    this.micStream = stream;
+    this.inputAudioContext = audioContext;
+    this.inputSource = source;
+    this.processor = processor;
+    this.micOutputGain = silentSink;
+    this.patchStatus({ micStreaming: true, micMuted: false, lastError: "" });
+    this.log("AGENT STEP 4 mic streaming started");
+  }
+
+  async stopMic({ notifyGemini = false, reason = "stop_mic" } = {}) {
+    this.micGeneration += 1;
+    if (notifyGemini) {
+      this.sendAudioStreamEnd(reason);
+    }
+
+    try {
+      this.processor?.disconnect?.();
+      this.inputSource?.disconnect?.();
+      this.micOutputGain?.disconnect?.();
+    } catch (_error) {
+      // Best-effort cleanup only.
+    }
+
+    this.processor = null;
+    this.inputSource = null;
+    this.micOutputGain = null;
+    this.micStream?.getTracks?.().forEach((track) => {
+      track.stop?.();
+    });
+    this.micStream = null;
+    const inputAudioContext = this.inputAudioContext;
+    this.inputAudioContext = null;
+    inputAudioContext?.close?.().catch?.(() => {});
+    this.patchStatus({ micStreaming: false, inputActive: false, inputLevel: 0, micMuted: false });
+    return this.getStatus();
+  }
+
+  isMicTrackLive() {
+    const tracks = this.micStream?.getTracks?.() ?? [];
+    return tracks.length > 0 && tracks.some((track) => track.readyState !== "ended");
+  }
+
+  sendAudioStreamEnd(reason = "audio_stream_end") {
+    if (!this.status.connected || !this.transport?.send) {
+      return false;
+    }
+
+    try {
+      this.sendJson(this.provider === "qwen"
+        ? { type: "input_audio_buffer.commit" }
+        : { realtimeInput: { audioStreamEnd: true } });
+      this.patchStatus({
+        lastInputKind: "audio_stream_end",
+        lastInputGateReason: reason
+      });
+      this.log(`Agent audioStreamEnd sent: ${reason}`, "debug");
+      return true;
+    } catch (error) {
+      this.log(`Agent audioStreamEnd failed: ${error.message}`, "debug");
+      return false;
+    }
+  }
+
+  async handleTransportMessage(rawMessage) {
+    const parsed = await parseTransportMessage(rawMessage);
+    const message = parsed?.message ?? null;
+
+    if (!message) {
+      this.log(
+        `Agent unparsable websocket message kind=${parsed?.kind ?? "unknown"} size=${parsed?.size ?? "unknown"} preview=${parsed?.preview ?? ""}`,
+        "warn"
+      );
+      return;
+    }
+
+    this.audioDebug.receivedMessages += 1;
+    this.patchStatus({
+      lastServerMessageDebug: summarizeServerMessage(message)
+    });
+
+    if (message.type === "error") {
+      const errorText = message.error?.message || message.message || "Agent provider error.";
+      this.patchStatus({ lastError: String(errorText) });
+      this.log(`Agent provider error: ${String(errorText)}`, "warn");
+    }
+
+    if (message.setupComplete || message.type === "session.updated") {
+      this.patchStatus({ setupComplete: true });
+      this.log("AGENT STEP 5 setup complete");
+      if (this.hasActiveFollowVisionContext()) {
+        this.sendVisionContext({ force: true, reason: "setup_complete" }).catch((error) => {
+          this.log(`Agent vision context send failed: ${error.message}`, "warn");
+        });
+      }
+    }
+
+    const transcriptions = this.handleTranscriptions(message);
+
+    const lifecycle = readServerLifecycle(message);
+    if (lifecycle.interrupted) {
+      this.inputCoordinator.handleInterrupted("agent_server_interrupted");
+      this.interruptAudio("agent_server_interrupted");
+    }
+
+    if (lifecycle.sessionHandle) {
+      this.patchStatus({
+        lastSessionHandle: lifecycle.sessionHandle,
+        lastSessionUpdateAt: this.now()
+      });
+    }
+
+    if (Number.isFinite(lifecycle.goAwayTimeLeftMs)) {
+      this.patchStatus({
+        goAwayAt: this.now(),
+        goAwayTimeLeftMs: lifecycle.goAwayTimeLeftMs
+      });
+      this.log(`Agent GoAway received timeLeftMs=${lifecycle.goAwayTimeLeftMs}`, "warn");
+    }
+
+    const audioChunks = extractAudioChunks(message);
+    if (audioChunks.length) {
+      this.inputCoordinator.markModelOutputStarted("audio");
+      const bytes = audioChunks.reduce((total, chunk) => total + estimateBase64Bytes(chunk.data), 0);
+      this.audioDebug.receivedAudioChunks += audioChunks.length;
+      this.audioDebug.receivedAudioBytes += bytes;
+    }
+    audioChunks.forEach((chunk) => this.enqueueOutputAudio(chunk.data, chunk.mimeType, transcriptions));
+
+    const functionCalls = readFunctionCalls(message);
+    const cancelledToolCallIds = readToolCallCancellationIds(message);
+    if (functionCalls.length) {
+      this.inputCoordinator.markToolTurnStarted();
+    }
+    this.log(`Agent tool requests: ${summarizeToolRequests(functionCalls, cancelledToolCallIds)}`);
+
+    if (functionCalls.length) {
+      this.handleToolCalls(functionCalls).catch((error) => {
+        this.patchStatus({ lastError: error.message });
+        this.log(`Agent tool handling failed: ${error.message}`, "warn");
+      });
+    }
+
+    if (cancelledToolCallIds.length) {
+      this.handleToolCallCancellation(cancelledToolCallIds).catch((error) => {
+        this.patchStatus({ lastError: error.message });
+        this.log(`Agent tool cancellation failed: ${error.message}`, "warn");
+      });
+    }
+
+    this.handleServerLifecycle(message);
+  }
+
+  handleServerLifecycle(message = {}) {
+    const lifecycle = readServerLifecycle(message);
+
+    if (lifecycle.generationComplete) {
+      this.inputCoordinator.handleGenerationComplete();
+    }
+
+    if (lifecycle.turnComplete) {
+      this.inputCoordinator.handleTurnComplete();
+    }
+  }
+
+  hasActiveFollowVisionContext() {
+    if (typeof this.getRuntimeContext !== "function") {
+      return false;
+    }
+
+    const context = this.getRuntimeContext() ?? {};
+    const scenario = context.vision?.scenario ?? {};
+    return Boolean(
+      scenario.active &&
+      scenario.type === "follow_object" &&
+      scenario.state !== "idle" &&
+      scenario.state !== "not_found"
+    );
+  }
+
+  handleTranscriptions(message) {
+    const inputText = message.type === "conversation.item.input_audio_transcription.completed"
+      ? message.transcript
+      : message.type === "conversation.item.input_audio_transcription.delta"
+        ? message.delta
+        : message.serverContent?.inputTranscription?.text ?? message.inputTranscription?.text ?? "";
+    const outputText = message.type === "response.audio_transcript.done"
+      ? message.transcript
+      : message.type === "response.audio_transcript.delta"
+        ? message.delta
+        : message.serverContent?.outputTranscription?.text ?? message.outputTranscription?.text ?? "";
+
+    if (inputText) {
+      this.patchStatus({
+        lastInputTranscript: inputText,
+        lastInputTranscriptAt: this.now(),
+        thinking: true,
+        turnActive: true,
+        lastInputKind: "audio_transcript",
+        lastUserCommandAt: this.now(),
+        lastInputGateReason: "received_input_transcription"
+      });
+    }
+
+    if (outputText) {
+      this.inputCoordinator.markModelOutputStarted("output_transcription");
+      this.patchStatus({ lastOutputTranscript: outputText });
+
+      if (this.status.audioPlaying || this.activeOutputSources.size > 0) {
+        this.maybeTriggerSpeechStartScenario({ inputText, outputText });
+      }
+    }
+
+    return { inputText, outputText };
+  }
+
+  async handleToolCalls(functionCalls = []) {
+    // Tool execution stays browser-local so Bluetooth body actions still run on the nearby client.
+    const responses = await Promise.all(functionCalls.map((call) => this.executeToolCall(call)));
+    const functionResponses = responses.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      response: entry.response
+    }));
+
+    if (this.provider === "qwen") {
+      responses.forEach((entry) => {
+        this.sendJson({
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: entry.id,
+            output: JSON.stringify(entry.response)
+          }
+        });
+      });
+      this.sendJson({ type: "response.create" });
+    } else {
+      this.sendJson({ toolResponse: { functionResponses } });
+    }
+    this.patchStatus({
+      latencyMs: this.status.startedAt ? this.now() - this.status.startedAt : this.status.latencyMs
+    });
+  }
+
+  async executeToolCall(call = {}) {
+    const name = String(call.name ?? "unknown");
+    const id = String(call.id ?? `${name}_${Date.now()}`);
+    const mapped = geminiFunctionCallToAction(call);
+
+    this.patchStatus({
+      lastToolCall: `${name} ${safeStringify(call.args ?? {})}`,
+      lastToolCallAt: this.now()
+    });
+
+    if (!mapped.ok) {
+      this.log(`Agent rejected tool ${name}: ${mapped.reason}`, "warn");
+      return {
+        id,
+        name,
+        response: {
+          error: mapped.reason
+        }
+      };
+    }
+
+    if (!this.toolExecutor?.executeAction) {
+      return {
+        id,
+        name,
+        response: {
+          error: "ToolExecutor is unavailable."
+        }
+      };
+    }
+
+    const action = this.addUserAuthorization(mapped.action);
+
+    if (this.shouldDeferSpeechStartToolCall(action)) {
+      return this.deferSpeechStartToolCall({ id, name, action });
+    }
+
+    logGeminiToolConsole("execute", {
+      id,
+      name,
+      actionType: action.type,
+      args: action.args
+    });
+    this.publishGeminiScenarioEvent("gemini_scenario_started", action, {
+      toolCallId: id,
+      toolName: name
+    });
+    this.pendingToolCalls.set(id, {
+      name,
+      action,
+      startedAt: this.now()
+    });
+
+    try {
+      const result = await this.toolExecutor.executeAction(action);
+      const status = result?.status ?? "completed";
+      const executed = result?.executed === true;
+      const accepted = ["completed", "queued"].includes(status) && executed;
+
+      this.pendingToolCalls.delete(id);
+      this.patchStatus({
+        lastToolResult: `${name}: ${status}`
+      });
+      logGeminiToolConsole(accepted ? "accepted" : "rejected", {
+        id,
+        name,
+        actionType: action.type,
+        status,
+        executed,
+        message: result?.message ?? status
+      });
+
+      if (!accepted) {
+        this.log(
+          `Agent tool ${name} did not execute: status=${status} message="${result?.message ?? "no result"}"`,
+          "warn"
+        );
+      } else if (action.type === "run_scenario") {
+        this.rememberAcceptedRunScenario(action.args?.name);
+      }
+      this.publishGeminiScenarioEvent("gemini_scenario_finished", action, {
+        toolCallId: id,
+        toolName: name,
+        status,
+        executed
+      });
+
+      return {
+        id,
+        name,
+        response: {
+          output: {
+            accepted,
+            queued: status === "queued",
+            status,
+            executed,
+            physical: Boolean(result?.physical),
+            message: result?.message ?? status,
+            action: summarizeGeminiAction(action),
+            detail: compactToolResult(result)
+          }
+        }
+      };
+    } catch (error) {
+      this.pendingToolCalls.delete(id);
+      this.publishGeminiScenarioEvent("gemini_scenario_finished", action, {
+        toolCallId: id,
+        toolName: name,
+        status: "failed",
+        error: error.message
+      });
+      this.patchStatus({
+        lastToolResult: `${name}: failed`,
+        lastError: error.message
+      });
+      logGeminiToolConsole("failed", {
+        id,
+        name,
+        actionType: action.type,
+        error: error.message
+      });
+      this.log(`Agent tool execution failed: ${error.message}`, "warn");
+      return {
+        id,
+        name,
+        response: {
+          error: error.message
+        }
+      };
+    }
+  }
+
+  addUserAuthorization(action = {}) {
+    if (!action || !["set_gimbal_mode", "move_gimbal"].includes(action.type)) {
+      return action;
+    }
+
+    const userInitiated = this.hasRecentUserGimbalCommand();
+    return {
+      ...action,
+      args: {
+        ...(action.args ?? {}),
+        // The model cannot self-authorize an idle or vision-triggered move.
+        userInitiated
+      }
+    };
+  }
+
+  hasRecentUserGimbalCommand() {
+    const receivedAt = Number(this.status.lastUserCommandAt || 0);
+    const ageMs = this.now() - receivedAt;
+    return receivedAt > 0 && ageMs >= 0 && ageMs <= 8_000;
+  }
+
+  async handleToolCallCancellation(ids = []) {
+    const cancelled = [];
+
+    ids.forEach((id) => {
+      const key = String(id ?? "");
+      if (!key) {
+        return;
+      }
+
+      if (this.deferredSpeechStartScenario?.id === key) {
+        cancelled.push(this.deferredSpeechStartScenario);
+        this.deferredSpeechStartScenario = null;
+        return;
+      }
+
+      const pending = this.pendingToolCalls.get(key);
+      if (pending) {
+        cancelled.push(pending);
+        this.pendingToolCalls.delete(key);
+      }
+    });
+
+    this.patchStatus({
+      lastToolResult: cancelled.length
+        ? `cancelled: ${cancelled.map((entry) => entry.name).join(", ")}`
+        : `cancelled unknown tool calls: ${ids.join(", ")}`
+    });
+
+    if (!cancelled.length) {
+      return;
+    }
+
+    if (cancelled.every(shouldKeepLocalToolRunningAfterGeminiCancellation)) {
+      this.log(`AGENT STEP 7 tool cancellation ignored for persistent local tool: ${ids.join(", ")}`, "warn");
+      return;
+    }
+
+    this.interruptAudio("gemini_tool_call_cancelled");
+    await this.toolExecutor?.cancelActiveScenario?.("gemini_tool_call_cancelled");
+    this.log(`AGENT STEP 7 tool cancellation: ${ids.join(", ")}`, "warn");
+  }
+
+  enqueueOutputAudio(base64Data, mimeType = "", speechContext = {}) {
+    if (!base64Data) {
+      this.log("AGENT AUDIO skip empty output chunk", "warn");
+      return;
+    }
+
+    globalThis.clearTimeout(this.speechStartFinishTimer);
+
+    if (!this.ensureOutputAudioContext()) {
+      this.patchStatus({ lastError: "Web Audio output is unavailable." });
+      this.log("AGENT AUDIO output unavailable: Web Audio context missing", "warn");
+      return;
+    }
+    this.resumeOutputAudio("output_chunk");
+
+    const rate = parseAudioRate(mimeType) || GEMINI_LIVE_OUTPUT_RATE;
+    const samples = pcm16Base64ToFloat32(base64Data);
+
+    if (!samples.length) {
+      this.patchStatus({
+        lastAudioDebug: `empty output chunk mime=${mimeType || "unknown"}`
+      });
+      this.log(`AGENT AUDIO decoded empty output chunk mime=${mimeType || "unknown"}`, "warn");
+      return;
+    }
+
+    const buffer = this.outputAudioContext.createBuffer(1, samples.length, rate);
+    buffer.copyToChannel(samples, 0);
+    const source = this.outputAudioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.outputAudioContext.destination);
+
+    const startAt = Math.max(
+      this.outputAudioContext.currentTime + 0.01,
+      this.nextOutputTime || this.outputAudioContext.currentTime
+    );
+    this.nextOutputTime = startAt + buffer.duration;
+    this.activeOutputSources.add(source);
+    source.onended = () => {
+      this.activeOutputSources.delete(source);
+      const endedAt = this.now();
+      if (this.activeOutputSources.size === 0 || endedAt - this.audioDebug.lastOutputEndLogAt > 1000) {
+        this.audioDebug.lastOutputEndLogAt = endedAt;
+        this.log(`AGENT AUDIO chunk ended active=${this.activeOutputSources.size}`, "debug");
+      }
+      this.refreshAudioPlayingStatus();
+    };
+    source.start(startAt);
+    this.audioDebug.queuedOutputChunks += 1;
+    if (!this.triggerDeferredSpeechStartScenario()) {
+      this.maybeTriggerSpeechStartScenario(speechContext);
+    }
+    this.face?.setSpeaking?.(true);
+    this.lifeEngine?.setSpeaking?.(true);
+    this.patchStatus({
+      audioPlaying: true,
+      thinking: false,
+      lastAudioAt: this.now(),
+      outputAudioState: this.outputAudioContext?.state ?? "",
+      lastAudioDebug: `queued ${samples.length} samples @ ${rate}Hz (${Math.round(buffer.duration * 1000)}ms), context=${this.outputAudioContext?.state ?? "unknown"}`
+    });
+    const outputLogAt = this.now();
+    if (this.audioDebug.queuedOutputChunks === 1 || outputLogAt - this.audioDebug.lastOutputLogAt > 1000) {
+      this.audioDebug.lastOutputLogAt = outputLogAt;
+      this.log(
+        `AGENT STEP 8 audio output queued chunk=${this.audioDebug.queuedOutputChunks} samples=${samples.length} rate=${rate} duration=${Math.round(buffer.duration * 1000)}ms context=${this.outputAudioContext?.state ?? "unknown"} startAt=${startAt.toFixed?.(3) ?? startAt}`,
+        "debug"
+      );
+    }
+
+    globalThis.clearTimeout(this.audioStatusTimer);
+    this.audioStatusTimer = globalThis.setTimeout(() => {
+      this.refreshAudioPlayingStatus();
+    }, Math.max(100, Math.ceil(buffer.duration * 1000) + 60));
+  }
+
+  recordInputAudioSent({ bytes, inputRate, outputRate, samples, inputLevel = 0, dropped = false } = {}) {
+    if (dropped) {
+      const droppedInputFrames = Number(this.status.droppedInputFrames || 0) + 1;
+      if (droppedInputFrames === 1 || droppedInputFrames % 8 === 0) {
+        this.patchStatus({
+          droppedInputFrames,
+          lastInputGateReason: "transport_backpressure"
+        });
+      } else {
+        this.status.droppedInputFrames = droppedInputFrames;
+      }
+    } else {
+      this.audioDebug.sentInputFrames += 1;
+      this.audioDebug.sentInputBytes += Number(bytes) || 0;
+    }
+    const now = this.now();
+    const cleanInputLevel = clampNumber(inputLevel, 0, 1, 0);
+
+    if (cleanInputLevel >= INPUT_ACTIVE_LEVEL) {
+      this.audioDebug.lastVoiceAt = now;
+    }
+
+    const inputActive = Boolean(this.audioDebug.lastVoiceAt && now - this.audioDebug.lastVoiceAt <= INPUT_ACTIVE_HOLD_MS);
+    if (
+      inputActive !== this.status.inputActive ||
+      now - this.audioDebug.lastInputStatusAt > 140
+    ) {
+      this.audioDebug.lastInputStatusAt = now;
+      this.patchStatus({
+        inputLevel: cleanInputLevel,
+        inputActive,
+        lastInputAudioAt: now,
+        lastVoiceAt: this.audioDebug.lastVoiceAt || this.status.lastVoiceAt
+      });
+    }
+
+    if (
+      (!dropped && this.audioDebug.sentInputFrames <= 5) ||
+      now - this.audioDebug.lastInputLogAt > 1000
+    ) {
+      this.audioDebug.lastInputLogAt = now;
+      this.log(
+        `AGENT ${dropped ? "DROP" : "TX"} audio frame=${this.audioDebug.sentInputFrames} bytes=${bytes} samples=${samples} inputRate=${Math.round(Number(inputRate) || 0)} outputRate=${outputRate} totalBytes=${this.audioDebug.sentInputBytes}`,
+        "debug"
+      );
+    }
+  }
+
+  interruptAudio(reason = "gemini_live_audio_interrupt") {
+    this.inputCoordinator?.clearPendingQuiet?.(reason);
+    this.activeOutputSources.forEach((source) => {
+      try {
+        source.stop();
+      } catch (_error) {
+        // Source may already have ended.
+      }
+    });
+    this.activeOutputSources.clear();
+    this.deferredSpeechStartScenario = null;
+    globalThis.clearTimeout(this.speechStartFinishTimer);
+    this.nextOutputTime = this.outputAudioContext?.currentTime ?? 0;
+    this.face?.setSpeaking?.(false);
+    this.lifeEngine?.setSpeaking?.(false);
+    this.patchStatus({
+      audioPlaying: false,
+      thinking: false,
+      generationActive: false,
+      turnActive: false,
+      lastInterruptedAt: this.now()
+    });
+    this.log(`Agent audio interrupted: ${reason}`);
+  }
+
+  async primeOutputAudio() {
+    if (!this.ensureOutputAudioContext()) {
+      this.patchStatus({
+        outputAudioState: "unavailable",
+        lastAudioDebug: "Web Audio output is unavailable."
+      });
+      return false;
+    }
+
+    await this.resumeOutputAudio("start");
+    this.playSilentUnlockBuffer();
+    this.patchStatus({
+      outputAudioState: this.outputAudioContext?.state ?? "",
+      lastAudioDebug: `audio primed, context=${this.outputAudioContext?.state ?? "unknown"}`
+    });
+    return true;
+  }
+
+  ensureOutputAudioContext() {
+    if (this.outputAudioContext) {
+      return true;
+    }
+
+    const AudioContextCtor = this.audioContextFactory();
+    if (typeof AudioContextCtor !== "function") {
+      return false;
+    }
+
+    this.outputAudioContext = new AudioContextCtor();
+    return true;
+  }
+
+  async resumeOutputAudio(reason = "resume") {
+    if (!this.outputAudioContext?.resume) {
+      return false;
+    }
+
+    try {
+      await this.outputAudioContext.resume();
+      this.patchStatus({
+        outputAudioState: this.outputAudioContext.state ?? "",
+        lastAudioDebug: `audio resume ok (${reason}), context=${this.outputAudioContext.state ?? "unknown"}`
+      });
+      return true;
+    } catch (error) {
+      this.patchStatus({
+        outputAudioState: this.outputAudioContext.state ?? "",
+        lastAudioDebug: `audio resume failed (${reason}): ${error.message}`,
+        lastError: error.message
+      });
+      this.log(`Agent audio resume failed: ${error.message}`, "warn");
+      return false;
+    }
+  }
+
+  playSilentUnlockBuffer() {
+    if (!this.outputAudioContext?.createBuffer || !this.outputAudioContext?.createBufferSource) {
+      return;
+    }
+
+    try {
+      const buffer = this.outputAudioContext.createBuffer(1, 1, this.outputAudioContext.sampleRate || GEMINI_LIVE_OUTPUT_RATE);
+      const source = this.outputAudioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.outputAudioContext.destination);
+      source.start(0);
+    } catch (_error) {
+      // Unlock is best-effort only; real audio playback will report failures.
+    }
+  }
+
+  refreshAudioPlayingStatus() {
+    const playing = this.activeOutputSources.size > 0;
+    this.patchStatus({
+      audioPlaying: playing,
+      outputAudioState: this.outputAudioContext?.state ?? this.status.outputAudioState
+    });
+    if (!playing) {
+      this.lastAudioPlaybackEndedAt = this.now();
+      this.face?.setSpeaking?.(false);
+      this.lifeEngine?.setSpeaking?.(false);
+      this.scheduleSpeechStartScenarioFinish();
+      this.inputCoordinator.handlePlaybackComplete();
+    }
+  }
+
+  scheduleSpeechStartScenarioFinish() {
+    globalThis.clearTimeout(this.speechStartFinishTimer);
+
+    if (this.lastSpeechStartScenarioName !== "tell_me_about_yourself") {
+      return false;
+    }
+
+    if (this.face?.isTellingActive?.() !== true) {
+      return false;
+    }
+
+    this.speechStartFinishTimer = globalThis.setTimeout(() => {
+      if (this.hasOutputAudioInFlight() || this.face?.isTellingActive?.() !== true) {
+        return;
+      }
+
+      this.executeSpeechStartScenarioAction({
+        id: `gemini_speech_finish_telling_${this.now()}`,
+        source: "gemini_live_speech_finish",
+        type: "run_scenario",
+        args: {
+          name: "finish_telling",
+          reason: "gemini_output_audio_ended"
+        },
+        reason: "gemini_live_speech_finish"
+      }, {
+        signature: `finish_telling:${this.now()}`,
+        logMessage: "Agent speech-finish scenario"
+      });
+    }, 650);
+
+    return true;
+  }
+
+  maybeTriggerSpeechStartScenario({ inputText = "", outputText = "" } = {}) {
+    if (!this.toolExecutor?.executeAction) {
+      return false;
+    }
+
+    if (!String(outputText ?? "").trim()) {
+      return false;
+    }
+
+    const scenarioName = selectSpeechStartScenario({
+      inputText,
+      outputText
+    });
+
+    if (!scenarioName) {
+      return false;
+    }
+
+    const now = this.now();
+    const signature = buildSpeechStartScenarioSignature({
+      scenarioName,
+      inputText,
+      outputText
+    });
+    const scenarioCooldownMs = speechStartScenarioCooldownMs(scenarioName);
+
+    if (
+      this.lastSpeechStartScenarioSignature === signature &&
+      now - this.lastSpeechStartScenarioAt < 12_000
+    ) {
+      return false;
+    }
+
+    if (
+      this.lastSpeechStartScenarioName === scenarioName &&
+      now - this.lastSpeechStartScenarioAt < scenarioCooldownMs
+    ) {
+      return false;
+    }
+
+    if (
+      this.lastAcceptedRunScenarioName === scenarioName &&
+      now - this.lastAcceptedRunScenarioAt < 5_000
+    ) {
+      return false;
+    }
+
+    const action = {
+      id: `gemini_speech_start_${scenarioName}_${now}`,
+      source: "gemini_live_speech_start",
+      type: "run_scenario",
+      args: {
+        name: scenarioName,
+        reason: "gemini_output_audio_started"
+      },
+      reason: "gemini_live_speech_start"
+    };
+
+    return this.executeSpeechStartScenarioAction(action, {
+      signature,
+      logMessage: "Agent speech-start scenario"
+    });
+  }
+
+  shouldDeferSpeechStartToolCall(action = {}) {
+    return Boolean(
+      action.type === "run_scenario" &&
+      isSpeechStartScenarioName(action.args?.name) &&
+      !this.hasOutputAudioInFlight()
+    );
+  }
+
+  hasOutputAudioInFlight() {
+    return Boolean(this.status.audioPlaying || this.activeOutputSources.size > 0);
+  }
+
+  deferSpeechStartToolCall({ id, name, action } = {}) {
+    const scenarioName = String(action?.args?.name ?? "").trim();
+    const now = this.now();
+    const expiresAt = now + 12_000;
+
+    this.deferredSpeechStartScenario = {
+      id,
+      name,
+      action,
+      scenarioName,
+      createdAt: now,
+      expiresAt
+    };
+    this.patchStatus({
+      lastToolResult: `${name}: queued_for_audio`
+    });
+    this.log(`Agent deferred speech-start scenario until audio: ${scenarioName}`);
+
+    return {
+      id,
+      name,
+      response: {
+        output: {
+          accepted: true,
+          queued: true,
+          status: "queued",
+          executed: false,
+          physical: false,
+          message: `Scenario ${scenarioName} queued until Agent output audio starts.`,
+          action: summarizeGeminiAction(action),
+          detail: {
+            scenario: scenarioName,
+            deferredUntil: "gemini_output_audio",
+            expiresAt
+          }
+        }
+      }
+    };
+  }
+
+  triggerDeferredSpeechStartScenario() {
+    const deferred = this.deferredSpeechStartScenario;
+    if (!deferred) {
+      return false;
+    }
+
+    this.deferredSpeechStartScenario = null;
+    const now = this.now();
+    if (now > deferred.expiresAt) {
+      this.log(`Agent deferred speech-start scenario expired before audio: ${deferred.scenarioName}`, "warn");
+      return false;
+    }
+
+    const action = {
+      ...deferred.action,
+      args: {
+        ...deferred.action.args,
+        reason: "gemini_output_audio_started"
+      },
+      reason: "gemini_live_deferred_speech_start_audio_started"
+    };
+
+    return this.executeSpeechStartScenarioAction(action, {
+      signature: `deferred:${deferred.scenarioName}:${deferred.id}`,
+      logMessage: "Agent deferred speech-start scenario"
+    });
+  }
+
+  executeSpeechStartScenarioAction(action = {}, { signature = "", logMessage = "Agent speech-start scenario" } = {}) {
+    if (!this.toolExecutor?.executeAction) {
+      return false;
+    }
+
+    const scenarioName = String(action.args?.name ?? "").trim();
+    if (!scenarioName) {
+      return false;
+    }
+
+    const now = this.now();
+    this.lastSpeechStartScenarioSignature = signature || `${scenarioName}:${now}`;
+    this.lastSpeechStartScenarioName = scenarioName;
+    this.lastSpeechStartScenarioAt = now;
+    this.patchStatus({
+      lastToolCall: `speech_start ${scenarioName}`,
+      lastToolCallAt: now
+    });
+    this.log(`${logMessage}: ${scenarioName}`);
+    this.publishGeminiScenarioEvent("gemini_scenario_started", action, {
+      toolName: "speech_start"
+    });
+    this.toolExecutor.executeAction(action)
+      .then((result) => {
+        const status = result?.status ?? "completed";
+        this.patchStatus({
+          lastToolResult: `speech_start ${scenarioName}: ${status}`
+        });
+
+        if (status !== "completed" || result?.executed === false) {
+          this.log(
+            `Agent speech-start scenario ${scenarioName} did not execute: status=${status} message="${result?.message ?? "no result"}"`,
+            "warn"
+          );
+        } else {
+          this.rememberAcceptedRunScenario(scenarioName);
+        }
+        this.publishGeminiScenarioEvent("gemini_scenario_finished", action, {
+          toolName: "speech_start",
+          status,
+          executed: result?.executed === true
+        });
+      })
+      .catch((error) => {
+        this.patchStatus({
+          lastToolResult: `speech_start ${scenarioName}: failed`,
+          lastError: error.message
+        });
+        this.log(`Agent speech-start scenario failed: ${error.message}`, "warn");
+        this.publishGeminiScenarioEvent("gemini_scenario_finished", action, {
+          toolName: "speech_start",
+          status: "failed",
+          error: error.message
+        });
+      });
+
+    return true;
+  }
+
+  publishGeminiScenarioEvent(type, action = {}, detail = {}) {
+    if (action.type !== "run_scenario" || !this.eventBus?.publish) {
+      return;
+    }
+    // DISABLED_ROBOFLOW_FOLLOW: no follow-specific event suppression is needed.
+
+    this.eventBus.publish(type, {
+      scenario: action.args?.name ?? "",
+      actionId: action.id ?? null,
+      actionSource: action.source ?? "",
+      reason: action.reason ?? "",
+      ...detail
+    }, {
+      source: "gemini_live",
+      priority: type === "gemini_scenario_started" ? 5 : 2
+    });
+  }
+
+  rememberAcceptedRunScenario(name) {
+    const scenarioName = String(name ?? "").trim();
+    if (!scenarioName) {
+      return;
+    }
+
+    this.lastAcceptedRunScenarioName = scenarioName;
+    this.lastAcceptedRunScenarioAt = this.now();
+  }
+
+  getTransportBufferedAmount() {
+    const bufferedAmount = Number(this.transport?.bufferedAmount);
+    return Number.isFinite(bufferedAmount) && bufferedAmount > 0 ? bufferedAmount : 0;
+  }
+
+  isTransportCongested() {
+    return this.getTransportBufferedAmount() >= MAX_AUDIO_TRANSPORT_BUFFERED_BYTES;
+  }
+
+  isVisionTransportCongested() {
+    return this.getTransportBufferedAmount() >= MAX_VISION_TRANSPORT_BUFFERED_BYTES;
+  }
+
+  sendJson(payload, { droppable = false } = {}) {
+    if (!this.transport?.send) {
+      if (droppable) {
+        return false;
+      }
+      throw new Error("Agent transport is not connected.");
+    }
+
+    if (this.transport.readyState !== undefined && this.transport.readyState !== 1) {
+      this.patchStatus({
+        running: false,
+        connected: false,
+        connecting: false
+      });
+      this.log("Agent send skipped because the relay socket is closed.", "debug");
+      return false;
+    }
+
+    if (droppable && this.isTransportCongested()) {
+      return false;
+    }
+
+    try {
+      const realtimePayload = this.provider === "qwen" && payload?.type && !payload.event_id
+        ? { event_id: createRealtimeEventId(), ...payload }
+        : payload;
+      this.transport.send(JSON.stringify(realtimePayload));
+      return true;
+    } catch (error) {
+      this.patchStatus({
+        running: false,
+        connected: false,
+        connecting: false,
+        lastError: error.message
+      });
+      this.log(`Agent send failed: ${error.message}`, "warn");
+      return false;
+    }
+  }
+
+  scheduleReconnect(reason = "transport_closed", runToken = this.runToken) {
+    if (
+      !this.shouldReconnect ||
+      runToken !== this.runToken ||
+      this.reconnectTimer ||
+      this.status.enabled === false
+    ) {
+      return;
+    }
+
+    const attempt = this.reconnectAttempt + 1;
+    if (attempt > MAX_RECONNECT_ATTEMPTS) {
+      this.shouldReconnect = false;
+      this.patchStatus({
+        running: false,
+        connecting: false,
+        connected: false,
+        reconnecting: false,
+        reconnectAttempt: attempt - 1,
+        lastError: "Agent reconnect limit reached. Please start it again."
+      });
+      this.log(`Agent reconnect stopped after ${attempt - 1} attempts: ${reason}`, "warn");
+      return;
+    }
+
+    this.reconnectAttempt = attempt;
+    const baseDelay = Math.min(
+      RECONNECT_MAX_DELAY_MS,
+      RECONNECT_BASE_DELAY_MS * (2 ** (attempt - 1))
+    );
+    const delayMs = Math.round(baseDelay * (0.85 + Math.random() * 0.3));
+    this.patchStatus({
+      running: true,
+      connecting: false,
+      connected: false,
+      reconnecting: true,
+      reconnectAttempt: attempt
+    });
+    this.log(`Agent reconnect scheduled attempt=${attempt} delay=${delayMs}ms reason=${reason}`, "warn");
+
+    this.reconnectTimer = globalThis.setTimeout(() => {
+      this.reconnectTimer = 0;
+      if (!this.shouldReconnect || runToken !== this.runToken) {
+        return;
+      }
+
+      this.connectSession(runToken, {
+        ...this.lastStartOptions,
+        captureAudio: this.captureAudioOnReconnect
+      }, {
+        reconnecting: true
+      }).catch((error) => {
+        this.log(`Agent reconnect failed unexpectedly: ${error.message}`, "warn");
+      });
+    }, delayMs);
+  }
+
+  clearReconnectTimer() {
+    if (!this.reconnectTimer) {
+      return;
+    }
+
+    globalThis.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = 0;
+  }
+
+  cleanupTransport() {
+    const transport = this.transport;
+    this.transport = null;
+    this.transportConnectionId += 1;
+
+    try {
+      transport?.close?.();
+    } catch (_error) {
+      // Best-effort cleanup only.
+    }
+  }
+
+  patchStatus(partial = {}) {
+    const previousStatus = this.status;
+    this.status = {
+      ...this.status,
+      ...partial
+    };
+    this.emitStatus({ immediate: isImmediateStatusPatch(partial, previousStatus) });
+  }
+
+  emitStatus({ immediate = false } = {}) {
+    if (!this.statusCallbacks.size) {
+      return;
+    }
+
+    const now = this.now();
+    const elapsedMs = now - this.lastStatusEmitAt;
+    if (!immediate && elapsedMs < STATUS_EMIT_INTERVAL_MS) {
+      if (!this.statusEmitTimer) {
+        this.statusEmitTimer = globalThis.setTimeout(() => {
+          this.statusEmitTimer = 0;
+          this.emitStatus({ immediate: true });
+        }, STATUS_EMIT_INTERVAL_MS - elapsedMs);
+      }
+      return;
+    }
+
+    if (this.statusEmitTimer) {
+      globalThis.clearTimeout(this.statusEmitTimer);
+      this.statusEmitTimer = 0;
+    }
+    this.lastStatusEmitAt = now;
+    const snapshot = this.getStatus();
+    this.statusCallbacks.forEach((callback) => callback(snapshot));
+  }
+
+  log(message, level = "info") {
+    if (typeof this.logger === "function") {
+      this.logger(message, level);
+    }
+  }
+}
+
+function isImmediateStatusPatch(partial = {}, previous = {}) {
+  return Object.keys(partial).some((key) =>
+    IMMEDIATE_STATUS_KEYS.has(key) && partial[key] !== previous[key]
+  );
+}
+
+export class GeminiInputCoordinator {
+  constructor({ runtime, now } = {}) {
+    this.runtime = runtime;
+    this.now = now ?? (() => Date.now());
+    this.pendingQuietInputs = new Map();
+    this.flushTimer = 0;
+  }
+
+  reset(reason = "reset") {
+    this.clearPendingQuiet(reason);
+    this.clearFlushTimer();
+  }
+
+  getQuietInputGate(kind = "quiet_context") {
+    const status = this.runtime?.status ?? {};
+    const now = this.now();
+
+    if (!status.connected) {
+      return buildInputGate(false, "not_connected", kind);
+    }
+
+    if (!status.setupComplete) {
+      return buildInputGate(false, "setup_pending", kind);
+    }
+
+    if ((this.runtime?.pendingToolCalls?.size ?? 0) > 0 || this.runtime?.deferredSpeechStartScenario) {
+      return buildInputGate(false, "tool_call_active", kind);
+    }
+
+    if (status.audioPlaying || this.runtime?.hasOutputAudioInFlight?.()) {
+      return buildInputGate(false, "audio_playing", kind);
+    }
+
+    if (status.generationActive) {
+      return buildInputGate(false, "generation_active", kind);
+    }
+
+    if (status.turnActive) {
+      return buildInputGate(false, "turn_active", kind);
+    }
+
+    if (status.thinking) {
+      return buildInputGate(false, "thinking", kind);
+    }
+
+    const cooldownAnchor = Math.max(
+      Number(status.lastTurnCompleteAt || 0),
+      Number(this.runtime?.lastAudioPlaybackEndedAt || 0),
+      Number(status.lastInterruptedAt || 0)
+    );
+    const cooldownRemainingMs = cooldownAnchor
+      ? QUIET_INPUT_COOLDOWN_MS - (now - cooldownAnchor)
+      : 0;
+
+    if (cooldownRemainingMs > 0) {
+      return buildInputGate(false, "quiet_cooldown", kind, cooldownRemainingMs);
+    }
+
+    return buildInputGate(true, "ready", kind);
+  }
+
+  async sendUserText(text, metadata = {}) {
+    const cleanText = String(text ?? "").trim();
+    const kind = String(metadata.kind ?? "user_text").trim() || "user_text";
+
+    if (!cleanText || !this.runtime?.status?.connected) {
+      this.patchGateStatus(kind, "not_connected_or_empty");
+      return false;
+    }
+
+    this.clearPendingQuiet("user_text");
+    if (this.runtime.provider === "qwen") {
+      this.runtime.sendJson({
+        type: "conversation.item.create",
+        item: { type: "message", role: "user", content: [{ type: "input_text", text: cleanText }] }
+      });
+      this.runtime.sendJson({ type: "response.create" });
+    } else {
+      this.runtime.sendJson({ realtimeInput: { text: cleanText } });
+    }
+    this.runtime.patchStatus({
+      thinking: true,
+      turnActive: true,
+      lastInputKind: kind,
+      lastUserCommandAt: this.now(),
+      lastInputGateReason: metadata.reason || metadata.source || "sent"
+    });
+    return true;
+  }
+
+  async sendQuietContext(kind = "quiet_context", payload = {}, metadata = {}) {
+    const cleanKind = String(kind || "quiet_context").trim() || "quiet_context";
+    const entry = this.buildQuietTextEntry(cleanKind, payload, metadata);
+
+    if (!entry.text) {
+      this.patchGateStatus(cleanKind, "empty");
+      return false;
+    }
+
+    const gate = this.getQuietInputGate(cleanKind);
+    if (!gate.ok) {
+      this.patchGateStatus(cleanKind, gate.reason);
+
+      if (metadata.coalesce === true && gate.reason !== "not_connected") {
+        this.pendingQuietInputs.set(cleanKind, entry);
+        metadata.onQueued?.(gate);
+        this.schedulePendingQuietFlush(`queued:${gate.reason}`);
+      } else {
+        metadata.onDropped?.(gate);
+      }
+
+      return false;
+    }
+
+    this.sendQuietTextEntry(entry, gate.reason);
+    return true;
+  }
+
+  async sendVisionFrame({
+    data,
+    mimeType = "image/jpeg",
+    width = null,
+    height = null,
+    reason = "gemini_vision"
+  } = {}) {
+    const cleanData = stripDataUrlPrefix(data);
+
+    if (!cleanData || !this.runtime?.status?.connected) {
+      this.patchGateStatus("vision_frame", "not_connected_or_empty");
+      return false;
+    }
+
+    const gate = this.getQuietInputGate("vision_frame");
+    if (!gate.ok) {
+      this.patchGateStatus("vision_frame", gate.reason);
+      return false;
+    }
+
+    if (this.runtime?.isVisionTransportCongested?.()) {
+      this.patchGateStatus("vision_frame", "transport_backpressure");
+      return false;
+    }
+
+    const sent = this.runtime.sendJson({
+      realtimeInput: {
+        video: {
+          data: cleanData,
+          mimeType
+        }
+      }
+    }, { droppable: true });
+
+    if (!sent) {
+      this.patchGateStatus("vision_frame", "transport_backpressure");
+      return false;
+    }
+
+    const sentVideoFrames = Number(this.runtime.status.sentVideoFrames || 0) + 1;
+    this.runtime.patchStatus({
+      lastVideoFrameAt: this.now(),
+      sentVideoFrames,
+      lastVideoFrameDebug: `${reason}: ${mimeType} ${width ?? "?"}x${height ?? "?"} bytes~${estimateBase64Bytes(cleanData)}`,
+      lastInputKind: "vision_frame",
+      lastInputGateReason: gate.reason
+    });
+    return true;
+  }
+
+  markModelOutputStarted(source = "model_output") {
+    this.runtime?.patchStatus?.({
+      generationActive: true,
+      turnActive: true,
+      lastInputGateReason: source
+    });
+  }
+
+  markToolTurnStarted() {
+    this.runtime?.patchStatus?.({
+      turnActive: true,
+      lastInputGateReason: "tool_call_received"
+    });
+  }
+
+  handleGenerationComplete() {
+    this.runtime?.patchStatus?.({
+      generationActive: false,
+      lastGenerationCompleteAt: this.now()
+    });
+    this.schedulePendingQuietFlush("generation_complete");
+  }
+
+  handleTurnComplete() {
+    this.runtime?.patchStatus?.({
+      generationActive: false,
+      turnActive: false,
+      thinking: false,
+      lastTurnCompleteAt: this.now()
+    });
+    this.schedulePendingQuietFlush("turn_complete");
+  }
+
+  handlePlaybackComplete() {
+    const status = this.runtime?.status ?? {};
+
+    if (!status.generationActive && status.turnActive) {
+      this.runtime.patchStatus({
+        turnActive: false,
+        thinking: false,
+        lastTurnCompleteAt: this.now()
+      });
+    }
+
+    this.schedulePendingQuietFlush("playback_complete");
+  }
+
+  handleInterrupted(reason = "interrupted") {
+    this.clearPendingQuiet(reason);
+    this.clearFlushTimer();
+    this.runtime?.patchStatus?.({
+      generationActive: false,
+      turnActive: false,
+      thinking: false,
+      lastInterruptedAt: this.now(),
+      lastInputGateReason: reason
+    });
+  }
+
+  clearPendingQuiet(reason = "clear_pending_quiet") {
+    if (!this.pendingQuietInputs.size) {
+      return;
+    }
+
+    this.pendingQuietInputs.clear();
+    this.runtime?.log?.(`AGENT quiet input pending cleared (${reason})`, "debug");
+  }
+
+  buildQuietTextEntry(kind, payload, metadata = {}) {
+    const wrapper = String(metadata.wrapper ?? kind).trim();
+    const payloadText = typeof payload === "string"
+      ? payload.trim()
+      : safeStringify(payload);
+    const text = metadata.rawText === true
+      ? payloadText
+      : wrapper
+        ? `<${wrapper}>${payloadText}</${wrapper}>`
+        : payloadText;
+
+    return {
+      kind,
+      text,
+      metadata
+    };
+  }
+
+  sendQuietTextEntry(entry, gateReason = "ready") {
+    if (this.runtime.provider === "qwen") {
+      this.runtime.sendJson({
+        type: "conversation.item.create",
+        item: { type: "message", role: "user", content: [{ type: "input_text", text: entry.text }] }
+      });
+      this.runtime.sendJson({ type: "response.create" });
+    } else {
+      this.runtime.sendJson({ realtimeInput: { text: entry.text } });
+    }
+    this.runtime.patchStatus({
+      thinking: true,
+      turnActive: true,
+      lastInputKind: entry.kind,
+      lastInputGateReason: entry.metadata.reason || gateReason || "sent"
+    });
+    entry.metadata.onSent?.();
+  }
+
+  schedulePendingQuietFlush(trigger = "pending_quiet") {
+    if (!this.pendingQuietInputs.size || this.flushTimer) {
+      return;
+    }
+
+    const firstEntry = this.pendingQuietInputs.values().next().value;
+    const gate = this.getQuietInputGate(firstEntry?.kind);
+    const delayMs = gate.ok
+      ? 0
+      : gate.reason === "quiet_cooldown"
+        ? Math.max(20, Number(gate.retryAfterMs || QUIET_INPUT_COOLDOWN_MS))
+        : 0;
+
+    if (!gate.ok && delayMs <= 0) {
+      return;
+    }
+
+    this.flushTimer = globalThis.setTimeout?.(() => {
+      this.flushTimer = 0;
+      this.flushPendingQuiet(trigger);
+    }, delayMs) ?? 0;
+  }
+
+  flushPendingQuiet(trigger = "pending_quiet") {
+    if (!this.pendingQuietInputs.size) {
+      return false;
+    }
+
+    const [kind, entry] = this.pendingQuietInputs.entries().next().value ?? [];
+    if (!entry) {
+      return false;
+    }
+
+    const gate = this.getQuietInputGate(kind);
+    if (!gate.ok) {
+      this.schedulePendingQuietFlush(`still_blocked:${gate.reason}`);
+      return false;
+    }
+
+    this.pendingQuietInputs.delete(kind);
+    this.runtime?.log?.(`AGENT quiet input flushed kind=${kind} trigger=${trigger}`, "debug");
+    this.sendQuietTextEntry(entry, `flushed:${trigger}`);
+    return true;
+  }
+
+  clearFlushTimer() {
+    if (!this.flushTimer) {
+      return;
+    }
+
+    globalThis.clearTimeout?.(this.flushTimer);
+    this.flushTimer = 0;
+  }
+
+  patchGateStatus(kind, reason) {
+    this.runtime?.patchStatus?.({
+      lastInputKind: kind,
+      lastInputGateReason: reason
+    });
+  }
+}
+
+function buildInputGate(ok, reason, kind, retryAfterMs = 0) {
+  return {
+    ok: Boolean(ok),
+    reason,
+    kind,
+    retryAfterMs: Math.max(0, Math.ceil(Number(retryAfterMs) || 0))
+  };
+}
+
+function downsampleFloat32(input, inputRate, outputRate) {
+  if (!input?.length || inputRate <= 0 || outputRate <= 0) {
+    return new Float32Array();
+  }
+
+  if (inputRate === outputRate) {
+    return new Float32Array(input);
+  }
+
+  const ratio = inputRate / outputRate;
+  const outputLength = Math.max(1, Math.floor(input.length / ratio));
+  const output = new Float32Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const start = Math.floor(index * ratio);
+    const end = Math.min(input.length, Math.floor((index + 1) * ratio));
+    let sum = 0;
+    let count = 0;
+
+    for (let cursor = start; cursor < end; cursor += 1) {
+      sum += input[cursor];
+      count += 1;
+    }
+
+    output[index] = count ? sum / count : input[start] ?? 0;
+  }
+
+  return output;
+}
+
+function calculateRms(input) {
+  if (!input?.length) {
+    return 0;
+  }
+
+  let sum = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Number(input[index]) || 0;
+    sum += sample * sample;
+  }
+
+  return Math.sqrt(sum / input.length);
+}
+
+export function float32ToPcm16(input) {
+  const output = new Int16Array(input.length);
+
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index] || 0));
+    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  }
+
+  return output;
+}
+
+function pcm16Base64ToFloat32(base64) {
+  const bytes = base64ToUint8Array(base64);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const samples = new Float32Array(Math.floor(bytes.byteLength / 2));
+
+  for (let index = 0; index < samples.length; index += 1) {
+    samples[index] = view.getInt16(index * 2, true) / 0x8000;
+  }
+
+  return samples;
+}
+
+export function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return globalThis.btoa(binary);
+}
+
+const SPEECH_START_SCENARIO_COOLDOWNS = Object.freeze({
+  angry: 3_500,
+  loving: 4_000,
+  question: 3_500,
+  shocked: 3_500,
+  tell_me_about_yourself: 8_000
+});
+const SPEECH_START_SCENARIO_NAMES = new Set(Object.keys(SPEECH_START_SCENARIO_COOLDOWNS));
+
+function selectSpeechStartScenario({ inputText = "", outputText = "" } = {}) {
+  const input = normalizeSpeechStartText(inputText);
+  const output = normalizeSpeechStartText(outputText);
+
+  if (!input && !output) {
+    return "";
+  }
+
+  if (matchesSelfIntroductionSpeech(input, output)) {
+    return "tell_me_about_yourself";
+  }
+
+  if (matchesAngrySpeech(output)) {
+    return "angry";
+  }
+
+  if (matchesShockedSpeech(output)) {
+    return "shocked";
+  }
+
+  if (matchesLovingSpeech(output)) {
+    return "loving";
+  }
+
+  if (matchesQuestionSpeech(output)) {
+    return "question";
+  }
+
+  return "";
+}
+
+function buildSpeechStartScenarioSignature({ scenarioName, inputText = "", outputText = "" } = {}) {
+  const output = normalizeSpeechStartText(outputText).slice(0, 220);
+  const input = normalizeSpeechStartText(inputText).slice(0, 160);
+  return `${scenarioName}:${input}:${output}`;
+}
+
+function speechStartScenarioCooldownMs(scenarioName) {
+  return SPEECH_START_SCENARIO_COOLDOWNS[scenarioName] ?? 4_000;
+}
+
+function isSpeechStartScenarioName(name) {
+  return SPEECH_START_SCENARIO_NAMES.has(String(name ?? "").trim());
+}
+
+function normalizeSpeechStartText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesSelfIntroductionSpeech(input, output) {
+  const inputAskedSelfIntroduction = /\b(tell me about yourself|introduce yourself|who are you|what are you|talk about yourself|about looi)\b/.test(input);
+  const outputIsSelfIntroduction = /\b(my name is looi|i am looi|i'm looi|i am your companion|i'm your companion|i am a small .*companion robot|i'm a small .*companion robot|as looi)\b/.test(output);
+  const outputLooksSelfDirected = /\b(i am|i'm|my name|looi|companion robot|phone-bodied)\b/.test(output);
+
+  return outputIsSelfIntroduction || (inputAskedSelfIntroduction && outputLooksSelfDirected);
+}
+
+function matchesAngrySpeech(output) {
+  if (!output || /\b(not angry|not mad|not frustrated|not annoyed)\b/.test(output)) {
+    return false;
+  }
+
+  return /(^|\s)(ugh|grr+|argh)(\s|[!,?.]|$)/.test(output) ||
+    /(^|\s)hey[!,]/.test(output) ||
+    /\b(not fair|come on|annoyed|annoying|frustrated|frustrating|mad|angry|how dare)\b/.test(output);
+}
+
+function matchesShockedSpeech(output) {
+  if (!output) {
+    return false;
+  }
+
+  return /(^|\s)(wow|whoa|woah|oh wow|no way)(\s|[!,?.]|$)/.test(output) ||
+    /(^|\s)(wait|hold on)[!,]/.test(output) ||
+    /\b(i just realized|i just realised|i did not expect|i didn't expect|that's surprising|that is surprising|surprising|unexpected|realization|realisation|i am shocked|i'm shocked|alarmed)\b/.test(output);
+}
+
+function matchesLovingSpeech(output) {
+  if (!output) {
+    return false;
+  }
+
+  return /(^|\s)(aww+|aw)(\s|[!,?.]|$)/.test(output) ||
+    /\b(that'?s so sweet|that is so sweet|that'?s sweet|that is sweet|so sweet of you|you are sweet|you're sweet|you are kind|you're kind|you are cute|you're cute)\b/.test(output) ||
+    /\b(i appreciate you|i really appreciate you|i love you|love you|sending love|that warms my heart)\b/.test(output);
+}
+
+function matchesQuestionSpeech(output) {
+  if (!output) {
+    return false;
+  }
+
+  return /\b(i'?m not sure|i am not sure|i don'?t understand|i do not understand|i'?m confused|i am confused|could you clarify|can you clarify|what do you mean)\b/.test(output);
+}
+
+function base64ToUint8Array(base64) {
+  const binary = globalThis.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+async function defaultFetchToken({ provider = "gemini" } = {}) {
+  const path = provider === "qwen"
+    ? "/api/qwen-omni-realtime/session"
+    : "/api/gemini-live/session";
+  const response = await fetch(apiUrl(path), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: "{}"
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.error || `Agent session HTTP ${response.status}`);
+  }
+
+  return payload;
+}
+
+function createGeminiRelayTransport({ url, onOpen, onMessage, onError, onClose }) {
+  const relayUrl = validateAgentRelayUrl(url);
+  const socket = new WebSocket(relayUrl);
+  socket.binaryType = "arraybuffer";
+  socket.addEventListener("open", onOpen);
+  socket.addEventListener("message", onMessage);
+  socket.addEventListener("error", onError);
+  socket.addEventListener("close", onClose);
+
+  return {
+    send: (data) => socket.send(data),
+    close: () => socket.close(),
+    get readyState() {
+      return socket.readyState;
+    },
+    get bufferedAmount() {
+      return socket.bufferedAmount;
+    }
+  };
+}
+
+function validateGeminiRelayUrl(url) {
+  const rawUrl = String(url ?? "").trim();
+
+  if (!rawUrl) {
+    throw new Error("Agent session response was missing websocketUrl.");
+  }
+
+  if (/generativelanguage\.googleapis\.com/i.test(rawUrl)) {
+    throw new Error("Agent must use the server relay, not a browser-direct provider WebSocket.");
+  }
+
+  if (/(access_token=|auth_tokens\/)/i.test(rawUrl)) {
+    throw new Error("Agent relay URL must not expose a browser provider token.");
+  }
+
+  const baseHref = globalThis.location?.href || "http://localhost/";
+  const parsed = new URL(rawUrl, baseHref);
+
+  if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+    throw new Error("Agent relay URL must use ws:// or wss://.");
+  }
+
+  if (!["/api/gemini-live/relay", "/api/qwen-omni-realtime/relay"].includes(parsed.pathname)) {
+    throw new Error("Agent relay URL must point to a configured Agent relay.");
+  }
+
+  const allowedBase = getBackendBaseUrl();
+  const allowedHost = allowedBase
+    ? new URL(allowedBase).host
+    : globalThis.location?.host;
+
+  if (allowedHost && parsed.host !== allowedHost) {
+    throw new Error("Agent relay URL must match the configured backend origin.");
+  }
+
+  return parsed.href;
+}
+
+function validateAgentRelayUrl(url, provider = "") {
+  const validated = validateGeminiRelayUrl(url);
+  const parsed = new URL(validated);
+  if (provider === "qwen" && parsed.pathname !== "/api/qwen-omni-realtime/relay") {
+    throw new Error("Qwen Agent relay URL must point to /api/qwen-omni-realtime/relay.");
+  }
+  return validated;
+}
+
+function createBrowserAudioContext() {
+  return globalThis.AudioContext || globalThis.webkitAudioContext;
+}
+
+function logGeminiToolConsole(event, detail = {}) {
+  const payload = {
+    id: detail.id,
+    name: detail.name,
+    actionType: detail.actionType,
+    args: detail.args,
+    status: detail.status,
+    executed: detail.executed,
+    message: detail.message,
+    error: detail.error
+  };
+  const compact = Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== "")
+  );
+  const method = event === "failed" || event === "rejected" ? "warn" : "info";
+  console[method]?.(`[LOOI] AGENT TOOL_${event.toUpperCase()}`, compact);
+}
+
+function parseJsonText(text) {
+  try {
+    return {
+      message: JSON.parse(text),
+      preview: text.slice(0, 300)
+    };
+  } catch (_error) {
+    return {
+      message: null,
+      preview: text.slice(0, 300)
+    };
+  }
+}
+
+async function parseTransportMessage(rawMessage) {
+  const data = rawMessage?.data ?? rawMessage;
+
+  if (typeof data === "string") {
+    return {
+      ...parseJsonText(data),
+      kind: "string",
+      size: data.length
+    };
+  }
+
+  if (data instanceof ArrayBuffer) {
+    const text = new TextDecoder().decode(new Uint8Array(data));
+    return {
+      ...parseJsonText(text),
+      kind: "arraybuffer",
+      size: data.byteLength
+    };
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    const text = new TextDecoder().decode(data);
+    return {
+      ...parseJsonText(text),
+      kind: "typedarray",
+      size: data.byteLength
+    };
+  }
+
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    const text = await data.text();
+    return {
+      ...parseJsonText(text),
+      kind: "messageevent.blob",
+      size: data.size
+    };
+  }
+
+  if (data && typeof data === "object") {
+    return {
+      message: data,
+      kind: "object",
+      size: null,
+      preview: Object.prototype.toString.call(data)
+    };
+  }
+
+  return {
+    message: null,
+    kind: typeof data,
+    size: null,
+    preview: ""
+  };
+}
+
+function extractAudioChunks(message = {}) {
+  const chunks = [];
+  if (message.type === "response.audio.delta" && message.delta) {
+    chunks.push({
+      data: message.delta,
+      mimeType: `audio/pcm;rate=${QWEN_OMNI_REALTIME_OUTPUT_RATE}`
+    });
+  }
+  const parts = [
+    ...(message.serverContent?.modelTurn?.parts ?? []),
+    ...(message.modelTurn?.parts ?? [])
+  ];
+
+  parts.forEach((part) => {
+    const inlineData = part.inlineData ?? part.inline_data;
+
+    if (!inlineData?.data) {
+      return;
+    }
+
+    const mimeType = inlineData.mimeType ?? inlineData.mime_type ?? "";
+    if (!/audio\/pcm/i.test(mimeType)) {
+      return;
+    }
+
+    chunks.push({
+      data: inlineData.data,
+      mimeType
+    });
+  });
+
+  if (message.data && typeof message.data === "string") {
+    chunks.push({
+      data: message.data,
+      mimeType: `audio/pcm;rate=${GEMINI_LIVE_OUTPUT_RATE}`
+    });
+  }
+
+  return chunks;
+}
+
+function summarizeServerMessage(message = {}) {
+  const parts = [
+    ...(message.serverContent?.modelTurn?.parts ?? []),
+    ...(message.modelTurn?.parts ?? [])
+  ];
+  const lifecycle = readServerLifecycle(message);
+  const audioCount = parts.filter((part) => {
+    const inlineData = part.inlineData ?? part.inline_data;
+    const mimeType = inlineData?.mimeType ?? inlineData?.mime_type ?? "";
+    return inlineData?.data && /audio\/pcm/i.test(mimeType);
+  }).length;
+  const textCount = parts.filter((part) => typeof part.text === "string" && part.text.trim()).length;
+  const toolCount = readFunctionCalls(message).length;
+  const cancelCount = readToolCallCancellationIds(message).length;
+  const labels = [];
+
+  if (message.type) labels.push(message.type);
+
+  if (message.setupComplete) labels.push("setupComplete");
+  if (message.serverContent?.inputTranscription?.text || message.inputTranscription?.text) labels.push("inputTranscript");
+  if (message.serverContent?.outputTranscription?.text || message.outputTranscription?.text) labels.push("outputTranscript");
+  if (audioCount) labels.push(`audio:${audioCount}`);
+  if (textCount) labels.push(`text:${textCount}`);
+  if (toolCount) labels.push(`tool:${toolCount}`);
+  if (cancelCount) labels.push(`cancel:${cancelCount}`);
+  if (lifecycle.interrupted) labels.push("interrupted");
+  if (lifecycle.generationComplete) labels.push("generationComplete");
+  if (lifecycle.turnComplete) labels.push("turnComplete");
+  if (lifecycle.sessionHandle) labels.push("sessionUpdate");
+  if (Number.isFinite(lifecycle.goAwayTimeLeftMs)) labels.push(`goAway:${Math.round(lifecycle.goAwayTimeLeftMs)}ms`);
+  if (!labels.length) labels.push(Object.keys(message).slice(0, 4).join(",") || "unknown");
+
+  return labels.join(" | ");
+}
+
+function readServerLifecycle(message = {}) {
+  if (message.type) {
+    return {
+      interrupted: message.type === "response.cancelled" || message.type === "conversation.item.input_audio_transcription.failed",
+      generationComplete: ["response.audio.done", "response.done"].includes(message.type),
+      turnComplete: message.type === "response.done",
+      sessionHandle: "",
+      goAwayTimeLeftMs: null
+    };
+  }
+  const serverContent = message.serverContent ?? message.server_content ?? {};
+  const sessionUpdate = message.sessionResumptionUpdate
+    ?? message.session_resumption_update
+    ?? serverContent.sessionResumptionUpdate
+    ?? serverContent.session_resumption_update
+    ?? {};
+  const goAway = message.goAway
+    ?? message.go_away
+    ?? serverContent.goAway
+    ?? serverContent.go_away
+    ?? {};
+
+  return {
+    interrupted: Boolean(serverContent.interrupted),
+    generationComplete: Boolean(
+      serverContent.generationComplete ??
+      serverContent.generation_complete ??
+      message.generationComplete ??
+      message.generation_complete
+    ),
+    turnComplete: Boolean(
+      serverContent.turnComplete ??
+      serverContent.turn_complete ??
+      message.turnComplete ??
+      message.turn_complete
+    ),
+    sessionHandle: shortText(sessionUpdate.newHandle ?? sessionUpdate.new_handle ?? sessionUpdate.handle, 2048),
+    goAwayTimeLeftMs: parseDurationMs(goAway.timeLeft ?? goAway.time_left)
+  };
+}
+
+function parseDurationMs(value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const text = String(value).trim();
+  const match = /^(-?\d+(?:\.\d+)?)(s|ms)?$/.exec(text);
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  return match[2] === "ms" ? amount : amount * 1000;
+}
+
+function readFunctionCalls(message = {}) {
+  if (message.type === "response.function_call_arguments.done") {
+    let args = {};
+    try {
+      args = JSON.parse(message.arguments || "{}");
+    } catch (_error) {
+      args = {};
+    }
+    return [{
+      id: message.call_id || message.item_id || `qwen_call_${Date.now()}`,
+      name: message.name,
+      args,
+      callId: message.call_id || message.item_id || ""
+    }];
+  }
+  const calls = message.toolCall?.functionCalls
+    ?? message.tool_call?.function_calls
+    ?? message.toolCall?.function_calls
+    ?? message.tool_call?.functionCalls
+    ?? [];
+
+  return Array.isArray(calls) ? calls : [];
+}
+
+function readToolCallCancellationIds(message = {}) {
+  const cancellation = message.toolCallCancellation ?? message.tool_call_cancellation;
+  const ids = cancellation?.ids ?? cancellation?.functionCallIds ?? cancellation?.function_call_ids ?? [];
+
+  return Array.isArray(ids)
+    ? ids.map((id) => String(id ?? "").trim()).filter(Boolean)
+    : [];
+}
+
+function summarizeToolRequests(functionCalls = [], cancelledIds = []) {
+  const calls = Array.isArray(functionCalls) ? functionCalls : [];
+  const parts = calls.map((call) => {
+    const name = String(call?.name ?? "unknown").trim() || "unknown";
+    const args = shortText(safeStringify(call?.args ?? {}), 220);
+    return `${name}(${args})`;
+  });
+
+  if (Array.isArray(cancelledIds) && cancelledIds.length) {
+    parts.push(`cancelled:${cancelledIds.join(",")}`);
+  }
+
+  return parts.length ? parts.join(" | ") : "none";
+}
+
+function compactToolResult(result = null) {
+  if (!result || typeof result !== "object") {
+    return null;
+  }
+
+  const route = result.detail?.route ?? null;
+  const routeResult = route?.result ?? null;
+
+  return {
+    actionId: result.actionId ?? null,
+    type: result.type ?? null,
+    status: result.status ?? null,
+    executed: Boolean(result.executed),
+    physical: Boolean(result.physical),
+    routeStatus: route?.status ?? null,
+    sequence: route?.sequence ?? result.detail?.sequence ?? null,
+    partial: Boolean(routeResult?.partial ?? result.detail?.partial),
+    skippedFrames: Array.isArray(routeResult?.skippedFrames)
+      ? routeResult.skippedFrames.slice(0, 8)
+      : undefined,
+    scenario: result.detail?.scenario ?? null,
+    execution: result.detail?.execution ?? null
+  };
+}
+
+function parseAudioRate(mimeType = "") {
+  const match = /rate=(\d+)/i.exec(String(mimeType));
+  const rate = match ? Number(match[1]) : NaN;
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : fallback;
+}
+
+function estimateBase64Bytes(base64 = "") {
+  const value = String(base64 || "");
+  if (!value) {
+    return 0;
+  }
+
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((value.length * 3) / 4) - padding);
+}
+
+function shouldKeepLocalToolRunningAfterGeminiCancellation(_entry = {}) {
+  // DISABLED_ROBOFLOW_FOLLOW: no persistent local follow tool remains active after cancellation.
+  return false;
+}
+
+function stripDataUrlPrefix(value) {
+  const text = String(value ?? "");
+  const commaIndex = text.indexOf(",");
+  return text.startsWith("data:") && commaIndex >= 0 ? text.slice(commaIndex + 1) : text;
+}
+
+function compactVisionContext(vision = {}, { recentObjectReference = null, reason = "" } = {}) {
+  return {
+    mode: "gemini_live_video",
+    reason: shortText(reason, 80),
+    cameraRunning: Boolean(vision?.cameraRunning),
+    currentCameraFacingMode: shortText(vision?.currentCameraFacingMode, 40),
+    // DISABLED_ROBOFLOW_FOLLOW: no activeTarget/follow/Roboflow metadata is sent to Agent.
+    recentObjectReference: recentObjectReference
+      ? {
+          label: shortText(recentObjectReference.label, 80)
+        }
+      : null
+  };
+}
+
+function stableVisionSignature(payload = {}) {
+  return {
+    mode: payload.mode,
+    cameraRunning: payload.cameraRunning,
+    currentCameraFacingMode: payload.currentCameraFacingMode,
+    recentObjectReference: payload.recentObjectReference
+      ? {
+          label: payload.recentObjectReference.label
+        }
+      : null
+  };
+}
+
+function shortText(value, max = 120) {
+  return String(value ?? "").slice(0, max);
+}
+
+function createRealtimeEventId() {
+  const random = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  return `event_${String(random).replaceAll("-", "")}`;
+}
