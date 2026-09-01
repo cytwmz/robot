@@ -36,14 +36,16 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = [
   "If the requested object or action is not visible, say you cannot see it and ask the user to show it. Do not invent objects.",
   "</perception_truth>",
   "<tool_rules>",
-  "You have three tools: run_scenario, set_gimbal_mode, and move_gimbal.",
+  "You have four tools: run_scenario, set_gimbal_mode, move_gimbal, and move.",
   `Allowed scenario names: ${MODEL_SCENARIO_PROMPT_LIST}.`,
   "Use set_gimbal_mode for explicit requests to start or stop curious idle looking.",
   "set_gimbal_mode mode must be exactly curious_idle or off.",
   "Use move_gimbal for explicit requests to look left, right, up, down, or center the camera head.",
   "move_gimbal direction must be exactly left, right, up, down, or center.",
-  "Use set_gimbal_mode and move_gimbal only as a direct response to the current user's spoken request.",
-  "Never move the gimbal, change a gimbal mode, or center the head because of live vision, body_context, idle time, mood, or initiative.",
+  "Use move for explicit user requests to drive the chassis: forward, backward, left, right, or stop.",
+  "move direction must be exactly forward, backward, left, right, or stop. Each move is one short safe step.",
+  "Use set_gimbal_mode, move_gimbal, and move only as a direct response to the current user's spoken request.",
+  "Never move the gimbal or the chassis, change a gimbal mode, or center the head because of live vision, body_context, idle time, mood, or initiative.",
   "Movement, camera capture, or any persistent state change requires explicit user intent or a runtime lifecycle transition.",
   "Safe expressive scenarios may be autonomous when live vision clearly supports them. React once per meaningful event; do not repeat while the same situation continues.",
   "For autonomous reactions, a tool-only response is allowed. Speak only if speech is useful.",
@@ -143,6 +145,37 @@ function buildGeminiLiveTools() {
               reason: {
                 type: "STRING",
                 description: "Short reason for the gimbal movement.",
+                nullable: true
+              }
+            },
+            required: ["direction"]
+          }
+        },
+        {
+          name: "move",
+          description:
+            "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop.",
+          parameters: {
+            type: "OBJECT",
+            properties: {
+              direction: {
+                type: "STRING",
+                description: "Chassis movement direction.",
+                enum: ["forward", "backward", "left", "right", "stop"]
+              },
+              speed: {
+                type: "NUMBER",
+                description: "Optional wheel speed from 0.05 through 0.12.",
+                nullable: true
+              },
+              durationMs: {
+                type: "NUMBER",
+                description: "Optional movement duration in milliseconds from 50 through 1000.",
+                nullable: true
+              },
+              reason: {
+                type: "STRING",
+                description: "Short reason for the chassis movement.",
                 nullable: true
               }
             },
@@ -277,6 +310,23 @@ function buildQwenOmniRealtimeTools() {
         required: ["direction"]
         }
       }
+    },
+    {
+      type: "function",
+      function: {
+        name: "move",
+        description: "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop.",
+        parameters: {
+        type: "object",
+        properties: {
+          direction: { type: "string", enum: ["forward", "backward", "left", "right", "stop"] },
+          speed: { type: "number", minimum: 0.05, maximum: 0.12 },
+          durationMs: { type: "number", minimum: 50, maximum: 1000 },
+          reason: { type: "string" }
+        },
+        required: ["direction"]
+        }
+      }
     }
   ];
 }
@@ -330,6 +380,32 @@ export function geminiFunctionCallToAction(call = {}) {
           reason: normalizeShortText(args.reason ?? args.args?.reason, 120)
         },
         reason: "gemini_live_move_gimbal"
+      }
+    };
+  }
+
+  if (name === "move") {
+    const direction = normalizeMoveDirection(args.direction ?? args.args?.direction);
+    if (!direction) {
+      return {
+        ok: false,
+        reason: "move requires forward, backward, left, right, or stop."
+      };
+    }
+
+    return {
+      ok: true,
+      action: {
+        id: call.id ? `gemini_${call.id}` : `gemini_move_${Date.now()}`,
+        source: "gemini_live",
+        type: "move",
+        args: {
+          direction,
+          speed: normalizeMoveSpeed(args.speed ?? args.args?.speed),
+          durationMs: normalizeMoveDurationMs(args.durationMs ?? args.args?.durationMs),
+          reason: normalizeShortText(args.reason ?? args.args?.reason, 120)
+        },
+        reason: "gemini_live_move"
       }
     };
   }
@@ -418,4 +494,21 @@ function normalizeGimbalDirection(value) {
 function normalizeGimbalDegrees(value) {
   const degrees = Number(value);
   return Number.isFinite(degrees) ? Math.min(45, Math.max(1, Math.round(degrees))) : undefined;
+}
+
+function normalizeMoveDirection(value) {
+  const direction = String(value ?? "").trim().toLowerCase();
+  return ["forward", "backward", "left", "right", "stop"].includes(direction)
+    ? direction
+    : "";
+}
+
+function normalizeMoveSpeed(value) {
+  const speed = Number(value);
+  return Number.isFinite(speed) ? Math.min(0.12, Math.max(0.05, speed)) : undefined;
+}
+
+function normalizeMoveDurationMs(value) {
+  const durationMs = Number(value);
+  return Number.isFinite(durationMs) ? Math.min(1000, Math.max(50, Math.round(durationMs))) : undefined;
 }

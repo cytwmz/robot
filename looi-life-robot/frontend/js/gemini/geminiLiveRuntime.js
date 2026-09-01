@@ -1074,7 +1074,7 @@ export class GeminiLiveRuntime {
   }
 
   addUserAuthorization(action = {}) {
-    if (!action || !["set_gimbal_mode", "move_gimbal"].includes(action.type)) {
+    if (!action || !["set_gimbal_mode", "move_gimbal", "move"].includes(action.type)) {
       return action;
     }
 
