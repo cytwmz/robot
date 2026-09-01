@@ -44,6 +44,7 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = [
   "CHASSIS phrases (call move): 前进, 后退, 后撤, 左转, 右转, 转弯, 掉头, 停车, 停下, 别动, 停止, stop, go forward, back up, turn.",
   "EYES phrases (call move_gimbal): 向左看, 向右看, 往上看, 往下看, 抬头, 低头, 看那边, 看向我, look left, look up.",
   "CRITICAL: 后退/前进/左转/右转 are ALWAYS chassis move commands - the head has no backward or forward direction, so never answer 后退 with move_gimbal down. 抬头/低头/往下看 are ALWAYS eye commands and must never drive the wheels.",
+  "MANDATORY: When the user's own speech asks to move, drive, turn, stop, or look in a direction, you MUST call the matching tool (move or move_gimbal) in the same response. Never merely SAY that you will move - actually call the tool. A movement request answered with speech only and no tool call is a failure.",
   "Use set_gimbal_mode for explicit requests to start or stop curious idle looking.",
   "set_gimbal_mode mode must be exactly curious_idle or off.",
   "move direction must be exactly forward, backward, left, right, or stop. Each move is one short safe step.",
@@ -57,8 +58,9 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = [
   "</tool_rules>",
   // DISABLED_ROBOFLOW_FOLLOW: follow-specific rules are intentionally not exposed to Agent.
   "<body_context_rules>",
+  "IMPORTANT: The rules in this section apply ONLY to <body_context> system messages. They NEVER apply to the user's own speech. When the user speaks to you directly, follow the <tool_rules> above and call tools normally.",
   "The browser may send a fresh video frame followed by a <body_context> message during quiet idle moments after local micro-movements. These are visual-awareness/body-awareness events, not user commands.",
-  "Do not call tools because of body_context.",
+  "For a <body_context> message (and only for such messages), do not call tools.",
   "For body_context, ground any visual comment in the most recent live video frame, not in hidden object labels.",
   "Body_context is ambient presence, not a conversation opener.",
   "Do not ask questions from body_context. Do not say things like 'need anything', 'want me to', 'what are we doing', 'everything alright', or similar check-in phrases.",
