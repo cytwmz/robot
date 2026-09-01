@@ -1,5 +1,5 @@
 import { clampNumber, safeStringify } from "../core/runtimeUtils.js";
-import { apiUrl, getBackendBaseUrl } from "../core/apiBase.js";
+import { apiUrl, getBackendBaseUrl, backendTunnelHeaders } from "../core/apiBase.js";
 import {
   GEMINI_LIVE_INPUT_RATE,
   GEMINI_LIVE_OUTPUT_RATE,
@@ -2364,9 +2364,7 @@ async function defaultFetchToken({ provider = "gemini" } = {}) {
     : "/api/gemini-live/session";
   const response = await fetch(apiUrl(path), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: backendTunnelHeaders({ "Content-Type": "application/json" }),
     body: "{}"
   });
   const payload = await response.json().catch(() => ({}));

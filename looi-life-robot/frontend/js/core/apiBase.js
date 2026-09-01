@@ -49,3 +49,23 @@ export function websocketUrlFromHttpBase(path = "/") {
   httpUrl.protocol = httpUrl.protocol === "https:" ? "wss:" : "ws:";
   return httpUrl.href;
 }
+
+// ngrok 免费版会对浏览器请求插入一次警告页；带上此头可跳过。
+// 仅当后端域名是 ngrok 时才加，本地/其他部署不受影响。
+export function backendTunnelHeaders(extra = {}) {
+  const headers = { ...extra };
+
+  try {
+    const host = new URL(
+      backendBaseUrl || globalThis.location?.href || "http://localhost/"
+    ).hostname;
+
+    if (/(\.|^)ngrok(-free)?\.(app|io|dev)$/.test(host)) {
+      headers["ngrok-skip-browser-warning"] = "true";
+    }
+  } catch (_error) {
+    // URL 解析失败时按无隧道处理即可。
+  }
+
+  return headers;
+}

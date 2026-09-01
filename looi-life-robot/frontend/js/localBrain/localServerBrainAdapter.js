@@ -1,4 +1,4 @@
-import { apiUrl } from "../core/apiBase.js";
+import { apiUrl, backendTunnelHeaders } from "../core/apiBase.js";
 
 export class LocalServerBrainAdapter {
   constructor({ logger } = {}) {
@@ -15,7 +15,8 @@ export class LocalServerBrainAdapter {
 
   async status() {
     const response = await fetch(apiUrl("/api/local-brain/status"), {
-      cache: "no-store"
+      cache: "no-store",
+      headers: backendTunnelHeaders()
     });
     const payload = await response.json().catch(() => ({}));
 
@@ -33,7 +34,7 @@ export class LocalServerBrainAdapter {
     const safeTriggerEvent = sanitizeBrainRequestValue(context.triggerEvent ?? null);
     const response = await fetch(apiUrl("/api/local-brain/think"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: backendTunnelHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         reason: safeContext.reason ?? context.reason ?? "manual",
         triggerEvent: safeTriggerEvent,

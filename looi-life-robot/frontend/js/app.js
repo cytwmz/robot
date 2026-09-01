@@ -1,6 +1,6 @@
 import { PUBLIC_CONFIG } from "./config.js";
 import { BrowserVoiceConversation } from "./audio/browserVoiceConversation.js";
-import { apiUrl, configureBackendBaseUrl } from "./core/apiBase.js";
+import { apiUrl, configureBackendBaseUrl, backendTunnelHeaders } from "./core/apiBase.js";
 import { LocalEventBus } from "./core/localEventBus.js";
 import { clampNumber, safeStringify } from "./core/runtimeUtils.js";
 import { EmbodiedActionRouter } from "./embodiment/embodiedActionRouter.js";
@@ -1200,7 +1200,8 @@ async function loadPublicConfig() {
   try {
     configureBackendBaseUrl(PUBLIC_CONFIG.backendBaseUrl);
     const response = await fetch(apiUrl("/api/config"), {
-      cache: "no-store"
+      cache: "no-store",
+      headers: backendTunnelHeaders()
     });
 
     if (!response.ok) {
