@@ -3,7 +3,7 @@ import {
 } from "../../../frontend/js/embodiment/scenarioCatalog.js";
 import { normalizeGimbalMode } from "../../../frontend/js/robot/gimbalModes.js";
 
-const LOCAL_BRAIN_ALLOWED_ACTIONS = new Set(["run_scenario", "set_gimbal_mode", "move_gimbal"]);
+const LOCAL_BRAIN_ALLOWED_ACTIONS = new Set(["run_scenario", "set_gimbal_mode", "move_gimbal", "move"]);
 
 const UNSAFE_ARG_KEYS = new Set([
   "pwm",
@@ -207,6 +207,28 @@ export function validateBrainAction(action) {
     };
   }
 
+  if (type === "move") {
+    const direction = normalizeMoveDirection(args.direction);
+    if (!direction) {
+      return {
+        ok: false,
+        error: "move requires forward, backward, left, right, or stop."
+      };
+    }
+    return {
+      ok: true,
+      action: {
+        type: "move",
+        args: {
+          direction,
+          durationMs: clampInteger(args.durationMs, 50, 1000, 600),
+          speed: clampNumber(args.speed, 0.05, 0.12, 0.1),
+          reason: typeof args.reason === "string" ? args.reason.slice(0, 120) : ""
+        }
+      }
+    };
+  }
+
   return {
     ok: false,
     error: `Unknown action type: ${type || "missing"}`
@@ -227,6 +249,21 @@ function normalizeGimbalDirection(value) {
   return ["left", "right", "up", "down", "center"].includes(direction)
     ? direction
     : "";
+}
+
+function normalizeMoveDirection(value) {
+  const direction = String(value ?? "").trim().toLowerCase();
+  return ["forward", "backward", "left", "right", "stop"].includes(direction)
+    ? direction
+    : "";
+}
+
+function clampInteger(value, min, max, fallback) {
+  const numeric = Math.round(Number(value));
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, numeric));
 }
 
 function normalizeGimbalDegrees(value) {

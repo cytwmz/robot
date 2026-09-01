@@ -9,8 +9,8 @@ import { PRIORITY_LEVELS } from "../embodiment/priorityScheduler.js";
 import { canonicalObjectLabel } from "../vision/objectLabelUtils.js";
 import { normalizeGimbalMode } from "./gimbalModes.js";
 
-const PHYSICAL_ACTIONS = new Set(["run_scenario", "move_gimbal", "stop"]);
-const BUILT_IN_ACTION_TYPES = new Set(["run_scenario", "set_gimbal_mode", "move_gimbal", "stop"]);
+const PHYSICAL_ACTIONS = new Set(["run_scenario", "move_gimbal", "move", "stop"]);
+const BUILT_IN_ACTION_TYPES = new Set(["run_scenario", "set_gimbal_mode", "move_gimbal", "move", "stop"]);
 
 // Browser-only execution layer. It never talks to ESP32 directly for movement.
 export class ToolExecutor {
@@ -177,6 +177,8 @@ export class ToolExecutor {
         return this.executeSetGimbalMode(args, action);
       case "move_gimbal":
         return this.executeMoveGimbal(args, action);
+      case "move":
+        return this.executeMove(args, action);
       case "stop":
         return this.executeStop(args, action);
       default:
@@ -751,6 +753,110 @@ export class ToolExecutor {
     }
   }
 
+  // Direct chassis drive from an explicit user voice/typed command.
+  // direction → wheel mixing happens in ESP32Client.sendMotion
+  // (negative angular = physical left turn).
+  async executeMove(args = {}, action = {}) {
+    const direction = normalizeMoveDirection(args.direction);
+    if (!direction) {
+      return this.buildResult("rejected", {
+        action,
+        executed: false,
+        physical: true,
+        message: "move requires forward, backward, left, right, or stop."
+      });
+    }
+
+    if (args.userInitiated !== true) {
+      return this.buildResult("rejected", {
+        action,
+        executed: false,
+        physical: true,
+        message: "Chassis movement requires a direct user command."
+      });
+    }
+
+    if (!this.isAutonomousControlEnabled()) {
+      return this.buildResult("rejected", {
+        action,
+        executed: false,
+        physical: true,
+        message: "Chassis movement is disabled while manual control is active."
+      });
+    }
+
+    const reason = normalizeShortText(args.reason ?? action.reason, 160) || "move";
+
+    if (!this.isMotionArmed(action)) {
+      return this.buildResult("rejected", {
+        action,
+        executed: false,
+        physical: true,
+        message: "Chassis did not move: local_motion_not_armed",
+        detail: { direction, reason }
+      });
+    }
+
+    if (direction === "stop") {
+      return this.executeStop({ reason: `voice_move_stop:${reason}` }, action);
+    }
+
+    if (!this.robotClient?.isConnected?.()) {
+      return this.buildResult("failed", {
+        action,
+        executed: false,
+        physical: true,
+        message: "Chassis did not move: robot_not_connected",
+        detail: { direction, reason }
+      });
+    }
+
+    if (typeof this.commandQueue?.enqueueMotion !== "function") {
+      return this.buildResult("failed", {
+        action,
+        executed: false,
+        physical: true,
+        message: "Robot command queue is unavailable."
+      });
+    }
+
+    const speed = normalizeMoveSpeed(args.speed);
+    const durationMs = normalizeMoveDurationMs(args.durationMs);
+    const linear = direction === "forward" ? speed : direction === "backward" ? -speed : 0;
+    const angular = direction === "left" ? -speed : direction === "right" ? speed : 0;
+
+    this.log(
+      `STEP 4 MOVE direction=${direction} speed=${speed.toFixed(2)} duration=${durationMs}ms`
+    );
+
+    try {
+      await this.commandQueue.enqueueMotion({
+        linear,
+        angular,
+        durationMs,
+        rampMs: 160,
+        label: `voice_move_${direction}`
+      });
+      this.lifeEngine?.receiveEvent?.({ type: "motion_command", direction, reason });
+      return this.buildResult("completed", {
+        action,
+        executed: true,
+        physical: true,
+        message: `Chassis moved ${direction}.`,
+        detail: { direction, speed, durationMs, reason }
+      });
+    } catch (error) {
+      this.log(`Chassis move failed (${direction}): ${error.message}`, "warn");
+      return this.buildResult("failed", {
+        action,
+        executed: false,
+        physical: true,
+        message: `Chassis move failed: ${error.message}`,
+        detail: { direction, reason }
+      });
+    }
+  }
+
   async executeRegisteredVoiceCommand(type, args = {}, action = {}) {
     const registered = this.voiceCommandHandlers.get(type);
     if (!registered) {
@@ -1251,6 +1357,23 @@ function normalizeGimbalDirection(value) {
   return ["left", "right", "up", "down", "center"].includes(direction)
     ? direction
     : "";
+}
+
+function normalizeMoveDirection(value) {
+  const direction = String(value ?? "").trim().toLowerCase();
+  return ["forward", "backward", "left", "right", "stop"].includes(direction)
+    ? direction
+    : "";
+}
+
+function normalizeMoveSpeed(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(0.12, Math.max(0.05, numeric)) : 0.1;
+}
+
+function normalizeMoveDurationMs(value) {
+  const numeric = Math.round(Number(value));
+  return Number.isFinite(numeric) ? Math.min(1000, Math.max(50, numeric)) : 600;
 }
 
 function normalizeFollowMode(mode) {

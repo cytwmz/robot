@@ -7,7 +7,8 @@ import { normalizeGimbalMode } from "../robot/gimbalModes.js";
 export const LOCAL_BRAIN_ALLOWED_ACTIONS = new Set([
   "run_scenario",
   "set_gimbal_mode",
-  "move_gimbal"
+  "move_gimbal",
+  "move"
 ]);
 
 const RAW_MOTOR_KEYS = new Set([
@@ -149,6 +150,13 @@ export function validateBrainAction(action) {
     };
   }
 
+  if (type === "move" && !normalizeMoveDirection(args.direction)) {
+    return {
+      ok: false,
+      error: "move requires forward, backward, left, right, or stop."
+    };
+  }
+
   return {
     ok: true,
     action: sanitizeAllowedAction(action, type, args)
@@ -197,6 +205,18 @@ function sanitizeAllowedAction(action, type, args) {
     };
   }
 
+  if (type === "move") {
+    return {
+      ...base,
+      args: {
+        direction: normalizeMoveDirection(args.direction),
+        durationMs: normalizeMoveDurationMs(args.durationMs),
+        speed: normalizeMoveSpeed(args.speed),
+        reason: typeof args.reason === "string" ? args.reason.slice(0, 120) : ""
+      }
+    };
+  }
+
   return {
     ...base,
     args: {}
@@ -226,6 +246,23 @@ function normalizeGimbalDirection(value) {
   return ["left", "right", "up", "down", "center"].includes(direction)
     ? direction
     : "";
+}
+
+function normalizeMoveDirection(value) {
+  const direction = String(value ?? "").trim().toLowerCase();
+  return ["forward", "backward", "left", "right", "stop"].includes(direction)
+    ? direction
+    : "";
+}
+
+function normalizeMoveDurationMs(value) {
+  const numeric = Math.round(Number(value));
+  return Number.isFinite(numeric) ? Math.min(1000, Math.max(50, numeric)) : 600;
+}
+
+function normalizeMoveSpeed(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(0.12, Math.max(0.05, numeric)) : 0.1;
 }
 
 function normalizeGimbalDegrees(value) {

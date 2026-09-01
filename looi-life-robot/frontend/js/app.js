@@ -1071,12 +1071,14 @@ async function init() {
     getRuntimeContext,
     getExecutionPolicy,
     setGimbalMode: ({ mode, source, reason }) => setGimbalMode(mode, { source, reason }),
-    moveGimbal: ({ direction, source, reason, userInitiated }) =>
+    moveGimbal: ({ direction, degrees, durationMs, source, reason, userInitiated }) =>
       gimbalBehaviorController?.move(direction, {
         // Spoken commands use the exact same step and speed as a held
         // control-pad button, so Agent and manual gimbal behavior match.
-        degrees: GIMBAL_USER_MOVE_DEGREES,
-        durationMs: GIMBAL_USER_MOVE_DURATION_MS,
+        // The model may request a larger angle; keep it within the 45°
+        // nudge threshold enforced by the ESP32 client.
+        degrees: Number.isFinite(Number(degrees)) ? Number(degrees) : GIMBAL_USER_MOVE_DEGREES,
+        durationMs: Number.isFinite(Number(durationMs)) ? Number(durationMs) : GIMBAL_USER_MOVE_DURATION_MS,
         label: `agent_gimbal_${direction}`,
         source,
         reason,
@@ -3030,7 +3032,9 @@ function sendManualGimbalFrame() {
   if (!direction || brainPolicy.controlMode !== "manual" || !robotClient?.isConnected?.()) return;
   try {
     const outcome = gimbalBehaviorController?.move(direction, {
-      degrees: GIMBAL_USER_MOVE_DEGREES,
+      // Held-button frames repeat every 100ms; keep each nudge small so the
+      // accumulated hold motion stays smooth instead of jumping 40° per frame.
+      degrees: 10,
       durationMs: GIMBAL_USER_MOVE_DURATION_MS,
       label: `manual_gimbal_${direction}`,
       userInitiated: true

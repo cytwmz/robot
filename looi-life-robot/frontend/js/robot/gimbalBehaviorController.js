@@ -5,8 +5,8 @@ const DEFAULTS = Object.freeze({
   curiousPauseMs: 700,
   curiousYawAngle: 75,
   automaticPitchEnabled: false,
-  userMoveDegrees: 12,
-  userMoveDurationMs: 90,
+  userMoveDegrees: 40,
+  userMoveDurationMs: 260,
   userMoveIntervalMs: 100
 });
 
@@ -170,9 +170,10 @@ export class GimbalBehaviorController {
 
     this.holdManualControl(Math.max(Number(durationMs) || 0, 220) + 900);
 
-    // Firmware already applies the hardware pulse sign. Send the canonical
-    // direction unchanged so every browser control has the same behavior.
-    const physicalDirection = normalizedDirection;
+    // The mounted servos are wired mirrored: the canonical direction must be
+    // inverted before it reaches the firmware so "look left" turns the head
+    // physically left (and likewise for pitch up/down).
+    const physicalDirection = INVERTED_DIRECTIONS[normalizedDirection] ?? normalizedDirection;
     const messageId = this.robotClient.sendGimbalMove({
       direction: physicalDirection,
       degrees,
@@ -192,6 +193,16 @@ export class GimbalBehaviorController {
   }
 
 }
+
+// Servo-level direction inversion (mirrored wiring): canonical user intent
+// must be flipped before the firmware drives the servos.
+const INVERTED_DIRECTIONS = Object.freeze({
+  left: "right",
+  right: "left",
+  up: "down",
+  down: "up",
+  center: "center"
+});
 
 function mapUserGimbalDirection(direction) { return direction; }
 
