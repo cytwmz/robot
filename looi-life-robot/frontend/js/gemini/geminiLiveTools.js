@@ -44,6 +44,7 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = [
   "move_gimbal direction must be exactly left, right, up, down, or center.",
   "Use move for explicit user requests to drive the chassis: forward, backward, left, right, or stop.",
   "move direction must be exactly forward, backward, left, right, or stop. Each move is one short safe step.",
+  "move with direction stop halts the chassis immediately and keeps the robot completely still until the next movement command; use it for stop, stay still, do not move, or hold still requests.",
   "Use set_gimbal_mode, move_gimbal, and move only as a direct response to the current user's spoken request.",
   "Never move the gimbal or the chassis, change a gimbal mode, or center the head because of live vision, body_context, idle time, mood, or initiative.",
   "Movement, camera capture, or any persistent state change requires explicit user intent or a runtime lifecycle transition.",
@@ -154,7 +155,7 @@ function buildGeminiLiveTools() {
         {
           name: "move",
           description:
-            "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop.",
+            "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop. direction stop halts the chassis and keeps the robot still until the next movement command.",
           parameters: {
             type: "OBJECT",
             properties: {
@@ -315,7 +316,7 @@ function buildQwenOmniRealtimeTools() {
       type: "function",
       function: {
         name: "move",
-        description: "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop.",
+        description: "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop. direction stop halts the chassis and keeps the robot still until the next movement command.",
         parameters: {
         type: "object",
         properties: {

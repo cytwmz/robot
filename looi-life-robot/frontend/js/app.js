@@ -1083,7 +1083,25 @@ async function init() {
         source,
         reason,
         userInitiated
-      }) ?? { ok: false, reason: "gimbal_controller_unavailable" }
+      }) ?? { ok: false, reason: "gimbal_controller_unavailable" },
+    // User chassis commands preempt the idle micro-movement scheduler so
+    // voice responses execute immediately instead of queueing behind idle
+    // scenario steps. "stop" keeps the robot still until the next move.
+    preemptIdleMotion: (reason) => {
+      idleScenarioScheduler?.cancelCurrent?.(reason);
+      // cancelCurrent alone leaves scheduling disarmed (stale play token),
+      // so re-arm it; the next idle scenario waits out the normal gap.
+      if (idleScenarioScheduler?.getStatus?.()?.enabled) {
+        idleScenarioScheduler?.start?.(reason);
+      }
+    },
+    setIdleMotionEnabled: (enabled, reason) => {
+      if (enabled) {
+        idleScenarioScheduler?.start?.(reason);
+      } else {
+        idleScenarioScheduler?.stop?.(reason);
+      }
+    }
   });
 
   // DISABLED_ROBOFLOW_FOLLOW: Follow controller/scenario manager startup is intentionally disabled.

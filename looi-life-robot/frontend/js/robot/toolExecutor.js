@@ -29,7 +29,9 @@ export class ToolExecutor {
     getExecutionPolicy,
     setGimbalMode,
     moveGimbal,
-    voiceCommandHandlers
+    voiceCommandHandlers,
+    preemptIdleMotion,
+    setIdleMotionEnabled
   } = {}) {
     this.lifeEngine = lifeEngine;
     this.face = face;
@@ -45,6 +47,11 @@ export class ToolExecutor {
     this.getExecutionPolicy = getExecutionPolicy;
     this.setGimbalMode = setGimbalMode;
     this.moveGimbal = moveGimbal;
+    this.preemptIdleMotion = preemptIdleMotion;
+    this.setIdleMotionEnabled = setIdleMotionEnabled;
+    // True after an explicit user "stay still" command; movement commands
+    // clear it and bring idle micro-movements back to life.
+    this.userStayStill = false;
     this.voiceCommandHandlers = new Map();
     for (const [type, handler] of Object.entries(voiceCommandHandlers ?? {})) {
       this.registerVoiceCommand(type, handler);
@@ -798,6 +805,11 @@ export class ToolExecutor {
     }
 
     if (direction === "stop") {
+      // Full "stay still": stop the chassis AND the idle micro-movement
+      // scheduler so the robot keeps still until the next move command.
+      this.userStayStill = true;
+      this.setIdleMotionEnabled?.(false, `user_stay_still:${reason}`);
+      this.preemptIdleMotion?.(`user_stay_still:${reason}`);
       return this.executeStop({ reason: `voice_move_stop:${reason}` }, action);
     }
 
@@ -820,8 +832,20 @@ export class ToolExecutor {
       });
     }
 
+    // A direct user command must feel immediate: drop pending idle
+    // micro-movement steps and cancel the running idle scenario instead of
+    // waiting behind them in the serial FIFO queue.
+    this.commandQueue.clear(`user_move_preempt:${reason}`);
+    this.preemptIdleMotion?.(`user_move:${reason}`);
+    if (this.userStayStill) {
+      this.userStayStill = false;
+      this.setIdleMotionEnabled?.(true, `user_move_resumed:${reason}`);
+    }
+
     const speed = normalizeMoveSpeed(args.speed);
-    const durationMs = normalizeMoveDurationMs(args.durationMs);
+    // Turns rotate in place and need a longer step to be clearly visible.
+    const defaultDurationMs = direction === "left" || direction === "right" ? 900 : 600;
+    const durationMs = normalizeMoveDurationMs(args.durationMs ?? defaultDurationMs);
     const linear = direction === "forward" ? speed : direction === "backward" ? -speed : 0;
     const angular = direction === "left" ? -speed : direction === "right" ? speed : 0;
 
