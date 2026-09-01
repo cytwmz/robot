@@ -38,11 +38,14 @@ const GEMINI_LIVE_SYSTEM_INSTRUCTION = [
   "<tool_rules>",
   "You have four tools: run_scenario, set_gimbal_mode, move_gimbal, and move.",
   `Allowed scenario names: ${MODEL_SCENARIO_PROMPT_LIST}.`,
+  "The robot has TWO separate motion systems. Never confuse them:",
+  "- CHASSIS (wheels/legs) = tool move. It carries the whole body and the eyes somewhere. It is the robot's legs.",
+  "- EYES/HEAD (gimbal) = tool move_gimbal. It only changes where the camera looks. It is the robot's eyes and can NEVER move the body.",
+  "CHASSIS phrases (call move): 前进, 后退, 后撤, 左转, 右转, 转弯, 掉头, 停车, 停下, 别动, 停止, stop, go forward, back up, turn.",
+  "EYES phrases (call move_gimbal): 向左看, 向右看, 往上看, 往下看, 抬头, 低头, 看那边, 看向我, look left, look up.",
+  "CRITICAL: 后退/前进/左转/右转 are ALWAYS chassis move commands - the head has no backward or forward direction, so never answer 后退 with move_gimbal down. 抬头/低头/往下看 are ALWAYS eye commands and must never drive the wheels.",
   "Use set_gimbal_mode for explicit requests to start or stop curious idle looking.",
   "set_gimbal_mode mode must be exactly curious_idle or off.",
-  "Use move_gimbal for explicit requests to look left, right, up, down, or center the camera head.",
-  "move_gimbal direction must be exactly left, right, up, down, or center.",
-  "Use move for explicit user requests to drive the chassis: forward, backward, left, right, or stop.",
   "move direction must be exactly forward, backward, left, right, or stop. Each move is one short safe step.",
   "move with direction stop halts the chassis immediately and keeps the robot completely still until the next movement command; use it for stop, stay still, do not move, or hold still requests.",
   "Use set_gimbal_mode, move_gimbal, and move only as a direct response to the current user's spoken request.",
@@ -129,7 +132,7 @@ function buildGeminiLiveTools() {
         {
           name: "move_gimbal",
           description:
-            "Move the camera gimbal one safe step in the requested direction. This moves the robot's eyes/head only and does not drive the chassis.",
+            "Move ONLY the EYES/CAMERA HEAD (gimbal) one safe step in the requested direction, such as 向左看 look left, 抬头 look up, or 低头 look down. This never drives the wheels or moves the body.",
           parameters: {
             type: "OBJECT",
             properties: {
@@ -155,7 +158,7 @@ function buildGeminiLiveTools() {
         {
           name: "move",
           description:
-            "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop. direction stop halts the chassis and keeps the robot still until the next movement command.",
+            "Drive the WHEELS/CHASSIS (the robot's legs) one short safe step for an explicit spoken user command such as 前进 go forward, 后退 back up, 左转 turn left, 右转 turn right, or 停 stop. This moves the whole robot body. direction stop halts the chassis and keeps the robot still until the next movement command.",
           parameters: {
             type: "OBJECT",
             properties: {
@@ -300,7 +303,7 @@ function buildQwenOmniRealtimeTools() {
       type: "function",
       function: {
         name: "move_gimbal",
-        description: "Move the camera gimbal one safe step for an explicit user request.",
+        description: "Move ONLY the EYES/CAMERA HEAD (gimbal) one safe step for an explicit user request like 向左看 look left, 抬头 look up, or 低头 look down. Never drives the wheels or moves the body.",
         parameters: {
         type: "object",
         properties: {
@@ -316,7 +319,7 @@ function buildQwenOmniRealtimeTools() {
       type: "function",
       function: {
         name: "move",
-        description: "Drive the chassis one short safe step for an explicit spoken user command such as go forward, back up, turn left, turn right, or stop. direction stop halts the chassis and keeps the robot still until the next movement command.",
+        description: "Drive the WHEELS/CHASSIS (the robot's legs) one short safe step for an explicit spoken user command such as 前进 go forward, 后退 back up, 左转 turn left, 右转 turn right, or 停 stop. This moves the whole robot body. direction stop halts the chassis and keeps the robot still until the next movement command.",
         parameters: {
         type: "object",
         properties: {
